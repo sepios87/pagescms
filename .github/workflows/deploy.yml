@@ -1,0 +1,88 @@
+name: Deploy
+
+# Builds Pages CMS and sends it to the PlanetHoster server over SSH.
+# Secrets (Settings > Secrets and variables > Actions):
+#   DEPLOY_SSH_KEY     private key of the deploy key (the public part is in the N0C panel)
+#   DEPLOY_KNOWN_HOSTS output of: ssh-keyscan -p <port> <host>
+#   DEPLOY_HOST        e.g. node123.example.com
+#   DEPLOY_PORT        e.g. 5022
+#   DEPLOY_USER        e.g. myuser
+# The .env file lives on the server only; it is never sent nor deleted.
+
+on:
+  push:
+    branches: [dev-sepios]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  APP_DIR: cms-app # Node app root declared in the panel (holds server.js)
+  CODE_DIR: cms-src # code, build and .env
+  NODE_VERSION: "22"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      # The build only needs these variables to exist: the real secrets stay in
+      # the server's .env, and migrations run on the server (see below).
+      - run: npx next build
+        env:
+          BASE_URL: https://cms.sepios.fr
+          BETTER_AUTH_SECRET: build-only-placeholder-secret-0123456789
+          CRYPTO_KEY: build-only-placeholder-key-0123456789
+          DATABASE_URL: postgresql://user:password@localhost:5432/db
+
+      - name: Prepare SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Send files
+        env:
+          SSH: ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        run: |
+          $SSH "$TARGET" "mkdir -p ~/$CODE_DIR ~/$APP_DIR"
+          # Code and build; node_modules and .env stay on the server
+          rsync -az --delete -e "$SSH" \
+            --exclude '.git' --exclude '.github' --exclude 'node_modules' \
+            --exclude '.env*' --exclude 'deploy' \
+            ./ "$TARGET:~/$CODE_DIR/"
+          # Passenger startup file
+          rsync -az -e "$SSH" deploy/server.js "$TARGET:~/$APP_DIR/server.js"
+
+      - name: Install, migrate and restart
+        env:
+          SSH: ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        run: |
+          $SSH "$TARGET" "APP_DIR=$APP_DIR CODE_DIR=$CODE_DIR NODE_VERSION=$NODE_VERSION bash -s" <<'REMOTE'
+          set -euo pipefail
+          # Node of the Passenger app (CloudLinux Node.js selector)
+          source "$HOME/nodevenv/$APP_DIR/$NODE_VERSION/bin/activate"
+          cd "$HOME/$CODE_DIR"
+          test -f .env || { echo "Missing $CODE_DIR/.env on the server"; exit 1; }
+          npm ci --include=dev # npm may omit dev dependencies on the host
+          npm run db:migrate
+          mkdir -p "$HOME/$APP_DIR/tmp"
+          touch "$HOME/$APP_DIR/tmp/restart.txt"
+          REMOTE
