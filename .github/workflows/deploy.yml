@@ -62,10 +62,11 @@ jobs:
           TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
         run: |
           $SSH "$TARGET" "mkdir -p ~/$CODE_DIR ~/$APP_DIR"
-          # Code and build; node_modules and .env stay on the server
+          # Code and build; node_modules and .env stay on the server. The patterns
+          # are anchored: .next/node_modules (links to external packages) must be sent.
           rsync -az --delete -e "$SSH" \
-            --exclude '.git' --exclude '.github' --exclude 'node_modules' \
-            --exclude '.env*' --exclude '.deps-stamp' --exclude 'deploy' \
+            --exclude '/.git' --exclude '/.github' --exclude '/node_modules' \
+            --exclude '/.env*' --exclude '/.deps-stamp' --exclude '/deploy' \
             ./ "$TARGET:~/$CODE_DIR/"
           # Passenger startup file
           rsync -az -e "$SSH" deploy/server.js "$TARGET:~/$APP_DIR/server.js"
