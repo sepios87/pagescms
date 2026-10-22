@@ -65,7 +65,7 @@ jobs:
           # Code and build; node_modules and .env stay on the server
           rsync -az --delete -e "$SSH" \
             --exclude '.git' --exclude '.github' --exclude 'node_modules' \
-            --exclude '.env*' --exclude 'deploy' \
+            --exclude '.env*' --exclude '.deps-stamp' --exclude 'deploy' \
             ./ "$TARGET:~/$CODE_DIR/"
           # Passenger startup file
           rsync -az -e "$SSH" deploy/server.js "$TARGET:~/$APP_DIR/server.js"
@@ -76,12 +76,19 @@ jobs:
           TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
         run: |
           $SSH "$TARGET" "APP_DIR=$APP_DIR CODE_DIR=$CODE_DIR NODE_VERSION=$NODE_VERSION bash -s" <<'REMOTE'
-          set -euo pipefail
+          # No -u: the CloudLinux activate script reads unset variables
+          set -eo pipefail
           # Node of the Passenger app (CloudLinux Node.js selector)
           source "$HOME/nodevenv/$APP_DIR/$NODE_VERSION/bin/activate"
           cd "$HOME/$CODE_DIR"
           test -f .env || { echo "Missing $CODE_DIR/.env on the server"; exit 1; }
-          npm ci --include=dev # npm may omit dev dependencies on the host
+          # Install only when the lockfile changed (slow disk: ~6 min). npm may omit
+          # dev dependencies on this host, hence --include=dev.
+          stamp="$(sha256sum package-lock.json | cut -d' ' -f1)"
+          if [ ! -d node_modules ] || [ "$(cat .deps-stamp 2>/dev/null)" != "$stamp" ]; then
+            npm ci --include=dev
+            echo "$stamp" > .deps-stamp
+          fi
           npm run db:migrate
           mkdir -p "$HOME/$APP_DIR/tmp"
           touch "$HOME/$APP_DIR/tmp/restart.txt"
