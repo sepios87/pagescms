@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { Field } from "@/types/field";
-import { EditComponent } from "./edit-component";
 import { ViewComponent } from "./view-component";
 
 const schema = (field: Field) => {
@@ -12,4 +11,4 @@ const schema = (field: Field) => {
 const defaultValue = false;
 const label = "Boolean";
 
-export { label, schema, defaultValue, EditComponent, ViewComponent };
+export { label, schema, defaultValue, ViewComponent };

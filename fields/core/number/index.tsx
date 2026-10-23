@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { Field } from "@/types/field";
-import { EditComponent } from "./edit-component";
 
 const schema = (field: Field, configObject?: Record<string, any>) => {
   let zodSchema = z.coerce.number();
@@ -13,4 +12,4 @@ const schema = (field: Field, configObject?: Record<string, any>) => {
 
 const label = "Number";
 
-export { label, schema, EditComponent };
+export { label, schema };

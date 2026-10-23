@@ -1,5 +1,4 @@
 import { Field } from "@/types/field";
-import { EditComponent } from "./edit-component";
 import { ViewComponent } from "./view-component";
 import { z } from "zod";
 
@@ -22,4 +21,4 @@ const schema = (field: Field, configObject?: Record<string, any>) => {
 
 const label = "Rich Text";
 
-export { label, schema, EditComponent, ViewComponent };
+export { label, schema, ViewComponent };

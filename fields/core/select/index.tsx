@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { Field } from "@/types/field";
-import { EditComponent } from "./edit-component";
 
 const schema = (field: Field) => {
   const normalizedValues = Array.isArray(field.options?.values)
@@ -44,4 +43,4 @@ const schema = (field: Field) => {
 
 const label = "Select";
 
-export { label, schema, EditComponent };
+export { label, schema };

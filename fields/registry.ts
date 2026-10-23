@@ -19,7 +19,6 @@ type FieldModule = {
   defaultValue?: any;
   read?: (...args: any[]) => any;
   write?: (...args: any[]) => any;
-  EditComponent?: React.ComponentType<any>;
   ViewComponent?: React.ComponentType<any>;
 };
 
@@ -29,7 +28,6 @@ const schemas: Record<string, (field: Field, configObject?: Record<string, any>)
 const defaultValues: Record<string, any> = {};
 const readFns: Record<string, (value: any, field: Field, configObject?: Record<string, any>) => void> = {};
 const writeFns: Record<string, (value: any, field: Field, configObject?: Record<string, any>) => void> = {};
-const editComponents: Record<string, React.ComponentType<any>> = {};
 const viewComponents: Record<string, React.ComponentType<any>> = {};
 
 const registerField = (fieldName: string, fieldModule: FieldModule) => {
@@ -40,7 +38,6 @@ const registerField = (fieldName: string, fieldModule: FieldModule) => {
   if (fieldModule.defaultValue !== undefined) defaultValues[fieldName] = fieldModule.defaultValue;
   if (fieldModule.read) readFns[fieldName] = fieldModule.read;
   if (fieldModule.write) writeFns[fieldName] = fieldModule.write;
-  if (fieldModule.EditComponent) editComponents[fieldName] = fieldModule.EditComponent;
   if (fieldModule.ViewComponent) viewComponents[fieldName] = fieldModule.ViewComponent;
 };
 
@@ -57,4 +54,4 @@ registerField("string", stringField);
 registerField("text", textField);
 registerField("uuid", uuidField);
 
-export { labels, schemas, readFns, writeFns, defaultValues, editComponents, viewComponents, fieldTypes };
+export { labels, schemas, readFns, writeFns, defaultValues, viewComponents, fieldTypes };

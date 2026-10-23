@@ -1,4 +1,3 @@
-import { EditComponent } from "./edit-component";
 import { z } from "zod";
 import { Field } from "@/types/field";
 
@@ -21,4 +20,4 @@ const schema = (field: Field, configObject?: Record<string, any>) => {
 
 const label = "String";
 
-export { label, schema, EditComponent };
+export { label, schema };
