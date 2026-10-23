@@ -385,17 +385,6 @@ export function CollectionTable<TData extends TableData>({
 
   return (
     <div className="space-y-2">
-      {bulk && selectedPaths.length > 0 && (
-        <CollectionBulkBar
-          count={selectedPaths.length}
-          canDelete={bulk.canDelete}
-          canDuplicate={bulk.canDuplicate}
-          busy={bulk.busy}
-          onDelete={() => runBulk("delete")}
-          onDuplicate={() => runBulk("duplicate")}
-          onClear={() => table.resetRowSelection()}
-        />
-      )}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -638,6 +627,18 @@ export function CollectionTable<TData extends TableData>({
             </PaginationContent>
           </Pagination>
         </footer>
+      )}
+      {/* After the list, and sticky: it appears without moving what is above it */}
+      {bulk && selectedPaths.length > 0 && (
+        <CollectionBulkBar
+          count={selectedPaths.length}
+          canDelete={bulk.canDelete}
+          canDuplicate={bulk.canDuplicate}
+          busy={bulk.busy}
+          onDelete={() => runBulk("delete")}
+          onDuplicate={() => runBulk("duplicate")}
+          onClear={() => table.resetRowSelection()}
+        />
       )}
     </div>
   )
