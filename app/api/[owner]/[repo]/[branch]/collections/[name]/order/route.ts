@@ -1,16 +1,10 @@
-import { createHash } from "node:crypto";
-import { createOctokitInstance } from "@/lib/utils/octokit";
 import { parse, stringify } from "@/lib/serialization";
 import { getFieldByPath, getSchemaByName, safeAccess, setByPath } from "@/lib/schema";
 import { getConfig } from "@/lib/config-store";
 import { getFileExtension, getParentPath, normalizePath, serializedTypes } from "@/lib/utils/file";
 import { getToken } from "@/lib/token";
-import {
-  getBranchHeadSha,
-  getCollectionCache,
-  setBranchHeadSha,
-  updateFileCache,
-} from "@/lib/github-cache-file";
+import { getCollectionCache, updateFileCache } from "@/lib/github-cache-file";
+import { commitChanges, gitBlobSha } from "@/lib/github-commit";
 import { createHttpError, toErrorResponse } from "@/lib/api-error";
 import { buildCommitTokens, resolveCommitIdentity, resolveCommitMessage } from "@/lib/commit-message";
 import { requireApiUserSession } from "@/lib/session-server";
@@ -148,9 +142,6 @@ export async function POST(
       ? { name: user.name?.trim() || user.email, email: user.email }
       : undefined;
 
-    const octokit = createOctokitInstance(token);
-    const headSha = await getBranchHeadSha(params.owner, params.repo, params.branch, token);
-
     const message = resolveCommitMessage({
       configObject: config.object,
       templatesOverride: schema.commit?.templates,
@@ -168,23 +159,15 @@ export async function POST(
       }),
     });
 
-    let commitSha: string;
-    try {
-      const options = { octokit, owner: params.owner, repo: params.repo, branch: params.branch, headSha, message, changes };
-      commitSha = committer
-        ? await commitWithRest({ ...options, committer })
-        : await commitWithGraphql(options);
-    } catch (error: any) {
-      console.error(error);
-      if (error.status === 409 || error.status === 422 || error.name === "GraphqlResponseError") {
-        throw createHttpError(
-          "The branch has changed or is protected. Please refresh the page and try again.",
-          409,
-        );
-      }
-      throw error;
-    }
-    setBranchHeadSha(params.owner, params.repo, params.branch, commitSha);
+    const commitSha = await commitChanges({
+      token,
+      owner: params.owner,
+      repo: params.repo,
+      branch: params.branch,
+      message,
+      additions: changes,
+      committer,
+    });
     const newShas = new Map(changes.map((change) => [change.path, gitBlobSha(change.content)]));
 
     const timestamp = Date.now();
@@ -217,72 +200,3 @@ export async function POST(
     return toErrorResponse(error);
   }
 }
-
-type CommitFilesOptions = {
-  octokit: ReturnType<typeof createOctokitInstance>;
-  owner: string;
-  repo: string;
-  branch: string;
-  headSha: string;
-  message: string;
-  changes: { path: string; content: string }[];
-};
-
-// SHA that Git gives to a file with this content
-const gitBlobSha = (content: string) =>
-  createHash("sha1")
-    .update(`blob ${Buffer.byteLength(content)}\0`)
-    .update(content)
-    .digest("hex");
-
-// Commits all the files in a single request. GitHub sets the author itself
-// (the app or the token's user), so it can't carry a custom committer.
-const commitWithGraphql = async ({ octokit, owner, repo, branch, headSha, message, changes }: CommitFilesOptions) => {
-  const result: any = await octokit.graphql(
-    `mutation ($input: CreateCommitOnBranchInput!) {
-      createCommitOnBranch(input: $input) { commit { oid } }
-    }`,
-    {
-      input: {
-        branch: { repositoryNameWithOwner: `${owner}/${repo}`, branchName: branch },
-        message: { headline: message },
-        expectedHeadOid: headSha,
-        fileChanges: {
-          additions: changes.map((change) => ({
-            path: change.path,
-            contents: Buffer.from(change.content).toString("base64"),
-          })),
-        },
-      },
-    },
-  );
-  return result.createCommitOnBranch.commit.oid as string;
-};
-
-// Same thing with the Git data API, for commits that must carry a committer
-const commitWithRest = async ({
-  octokit, owner, repo, branch, headSha, message, changes, committer,
-}: CommitFilesOptions & { committer: { name: string; email: string } }) => {
-  const { data: headCommit } = await octokit.rest.git.getCommit({ owner, repo, commit_sha: headSha });
-  const { data: tree } = await octokit.rest.git.createTree({
-    owner,
-    repo,
-    base_tree: headCommit.tree.sha,
-    tree: changes.map((change) => ({
-      path: change.path,
-      mode: "100644" as const,
-      type: "blob" as const,
-      content: change.content,
-    })),
-  });
-  const { data: commit } = await octokit.rest.git.createCommit({
-    owner,
-    repo,
-    message,
-    tree: tree.sha,
-    parents: [headSha],
-    committer,
-  });
-  await octokit.rest.git.updateRef({ owner, repo, ref: `heads/${branch}`, sha: commit.sha });
-  return commit.sha;
-};

@@ -7,6 +7,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ArrowDown, ArrowUp, Folder, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Thumbnail } from "@/components/thumbnail";
 import { safeAccess } from "@/lib/schema";
 import { cn } from "@/lib/utils";
@@ -68,11 +69,14 @@ const CardContent = ({
   thumbnail,
   primaryField,
   handle,
+  selectable,
 }: {
   row: Row<CardRow>;
   thumbnail: CardsThumbnail;
   primaryField?: string;
   handle?: ReactNode;
+  // Show the checkbox that ticks the entry (for the bulk actions)
+  selectable?: boolean;
 }) => {
   const cells = row.getVisibleCells();
   const primaryCell = cells.find((cell) => cell.column.id === primaryField);
@@ -94,6 +98,15 @@ const CardContent = ({
       <div className="relative">
         <Thumbnail name={thumbnail.media} path={imagePath} className="aspect-[4/3]" />
         {handle && <div className="absolute left-2 top-2">{handle}</div>}
+        {selectable && (
+          <div className="absolute right-2 top-2 rounded-md bg-background/90 p-1 shadow-sm">
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(value) => row.toggleSelected(!!value)}
+              aria-label="Select this entry"
+            />
+          </div>
+        )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1 p-3">
         {primaryCell && (
@@ -117,14 +130,17 @@ const CardContent = ({
   );
 };
 
+const selectedCardClassName = "ring-2 ring-primary";
+
 const cardClassName = "group relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card text-card-foreground";
 
 const StaticCard = (props: {
   row: Row<CardRow>;
   thumbnail: CardsThumbnail;
   primaryField?: string;
+  selectable?: boolean;
 }) => (
-  <li className={cardClassName}>
+  <li className={cn(cardClassName, props.row.getIsSelected() && selectedCardClassName)}>
     <CardContent {...props} />
   </li>
 );
@@ -135,11 +151,13 @@ const SortableCard = ({
   thumbnail,
   primaryField,
   reorder,
+  selectable,
 }: {
   row: Row<CardRow>;
   thumbnail: CardsThumbnail;
   primaryField?: string;
   reorder: CardsReorder;
+  selectable?: boolean;
 }) => {
   const {
     attributes,
@@ -155,12 +173,13 @@ const SortableCard = ({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(cardClassName, isDragging && "z-10 shadow-lg")}
+      className={cn(cardClassName, row.getIsSelected() && selectedCardClassName, isDragging && "z-10 shadow-lg")}
     >
       <CardContent
         row={row}
         thumbnail={thumbnail}
         primaryField={primaryField}
+        selectable={selectable}
         handle={
           <CardHandle
             {...reorder}
@@ -182,12 +201,15 @@ export function CollectionCards({
   primaryField,
   pathname,
   reorder,
+  selectable,
 }: {
   table: Table<CardRow>;
   thumbnail: CardsThumbnail;
   primaryField?: string;
   pathname: string;
   reorder?: CardsReorder;
+  // Let the user tick the cards (for the bulk actions)
+  selectable?: boolean;
 }) {
   const sortableColumns = table
     .getAllLeafColumns()
@@ -197,9 +219,28 @@ export function CollectionCards({
 
   return (
     <div className="space-y-4">
-      {sortableColumns.length > 0 && (
-        <div className="flex items-center gap-2 text-sm">
-          <label htmlFor="cards-sort" className="text-muted-foreground">Sort by</label>
+      {(sortableColumns.length > 0 || selectable) && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          {selectable && (
+            <label className="mr-2 flex items-center gap-2 text-muted-foreground">
+              <Checkbox
+                checked={
+                  table.getIsAllPageRowsSelected()
+                    ? true
+                    : table.getIsSomePageRowsSelected()
+                      ? "indeterminate"
+                      : false
+                }
+                onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                aria-label="Select all the entries of the page"
+              />
+              Select all
+            </label>
+          )}
+          {sortableColumns.length > 0 && (
+            <label htmlFor="cards-sort" className="text-muted-foreground">Sort by</label>
+          )}
+          {sortableColumns.length > 0 && (
           <select
             id="cards-sort"
             className="h-8 rounded-md border bg-background px-2 text-sm"
@@ -215,7 +256,8 @@ export function CollectionCards({
               </option>
             ))}
           </select>
-          {sort && (
+          )}
+          {sortableColumns.length > 0 && sort && (
             <Button
               type="button"
               variant="outline"
@@ -251,9 +293,10 @@ export function CollectionCards({
                 thumbnail={thumbnail}
                 primaryField={primaryField}
                 reorder={reorder}
+                selectable={selectable}
               />
             ) : (
-              <StaticCard key={row.id} row={row} thumbnail={thumbnail} primaryField={primaryField} />
+              <StaticCard key={row.id} row={row} thumbnail={thumbnail} primaryField={primaryField} selectable={selectable} />
             )
           )}
         </ul>

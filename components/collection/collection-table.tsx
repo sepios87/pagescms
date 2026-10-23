@@ -15,6 +15,7 @@ import {
   useReactTable,
   RowData,
   ExpandedState,
+  RowSelectionState,
   Row
 } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,9 @@ import {
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { ArrowUp, ArrowDown, GripVertical, Loader, CircleMinus, CirclePlus, Folder, FolderOpen } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CollectionCards, type CardsThumbnail } from "./collection-cards";
+import { CollectionBulkBar } from "./collection-bulk-bar";
 
 declare module '@tanstack/react-table' {
   interface ColumnMeta<TData extends RowData, TValue> {
@@ -70,6 +73,14 @@ const LShapeIcon = ({ className }: { className?: string }) => (
       strokeLinejoin="round"/>
   </svg>
 );
+
+export type TableBulk = {
+  canDelete: boolean;
+  canDuplicate: boolean;
+  busy: boolean;
+  // Runs the action on the files with these paths; resolves to true on success
+  onAction: (action: "delete" | "duplicate", paths: string[]) => Promise<boolean>;
+};
 
 export type TableReorder = {
   // Column (field path) holding the manual position
@@ -146,6 +157,7 @@ const RowShell = ({
   enabled,
   hint,
   onSortByPosition,
+  leading,
   children,
 }: {
   reorder: boolean;
@@ -154,20 +166,23 @@ const RowShell = ({
   enabled: boolean;
   hint: string;
   onSortByPosition?: () => void;
+  // Cell(s) shown before the entry's own cells (the selection checkbox)
+  leading?: ReactNode;
   children: ReactNode;
 }) => {
-  if (!reorder) return <TableRow>{children}</TableRow>;
+  const content = <>{leading}{children}</>;
+  if (!reorder) return <TableRow>{content}</TableRow>;
   if (isFile) {
     return (
       <ReorderRow id={id} enabled={enabled} hint={hint} onSortByPosition={onSortByPosition}>
-        {children}
+        {content}
       </ReorderRow>
     );
   }
   return (
     <TableRow>
       <TableCell className="p-2 border-b py-0 h-12 w-8" />
-      {children}
+      {content}
     </TableRow>
   );
 };
@@ -185,7 +200,8 @@ export function CollectionTable<TData extends TableData>({
   primaryField,
   layout = "list",
   thumbnail,
-  reorder
+  reorder,
+  bulk
 }: {
   columns: any[],
   data: Record<string, any>[],
@@ -200,9 +216,12 @@ export function CollectionTable<TData extends TableData>({
   // "cards" shows each entry as a card with its picture (needs a thumbnail)
   layout?: "list" | "cards",
   thumbnail?: CardsThumbnail,
-  reorder?: TableReorder
+  reorder?: TableReorder,
+  // Set to let the user tick entries and delete or duplicate them together
+  bulk?: TableBulk
 }) {
   const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   
   const [loadingRows, setLoadingRows] = useState<Record<string, boolean>>({});
   const loadingPathSetRef = useRef<Set<string>>(new Set());
@@ -250,13 +269,41 @@ export function CollectionTable<TData extends TableData>({
     getExpandedRowModel: getExpandedRowModel(),
     getRowCanExpand: (row) => row.original.isNode || row.original.type === "dir",
     getSubRows: (row) => row.subRows,
+    // The path identifies an entry, so a selection survives a refresh or a new sort
+    getRowId: bulk ? (row) => row.path : undefined,
+    enableRowSelection: (row) => !!bulk && row.original.type === "file",
     state: {
       globalFilter: search,
       expanded,
+      rowSelection,
     },
     onGlobalFilterChange: setSearch,
     onExpandedChange: setExpanded,
+    onRowSelectionChange: setRowSelection,
   });
+
+  // Only what is still visible after a search counts as selected
+  const selectedPaths = bulk
+    ? table.getFilteredSelectedRowModel().rows.map((row) => row.original.path)
+    : [];
+
+  const runBulk = async (action: "delete" | "duplicate") => {
+    if (!bulk) return;
+    const done = await bulk.onAction(action, selectedPaths);
+    if (done) table.resetRowSelection();
+  };
+
+  const selectCell = (row: Row<Record<string, any>>) => (
+    <TableCell className="p-2 border-b py-0 h-12 w-8">
+      {row.original.type === "file" && (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select this entry"
+        />
+      )}
+    </TableCell>
+  );
 
   // Reordering is only possible when the list is sorted by position (ascending)
   // and nothing is filtered out, so what is on screen is the whole order.
@@ -338,6 +385,17 @@ export function CollectionTable<TData extends TableData>({
 
   return (
     <div className="space-y-2">
+      {bulk && selectedPaths.length > 0 && (
+        <CollectionBulkBar
+          count={selectedPaths.length}
+          canDelete={bulk.canDelete}
+          canDuplicate={bulk.canDuplicate}
+          busy={bulk.busy}
+          onDelete={() => runBulk("delete")}
+          onDuplicate={() => runBulk("duplicate")}
+          onClear={() => table.resetRowSelection()}
+        />
+      )}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -351,6 +409,7 @@ export function CollectionTable<TData extends TableData>({
           thumbnail={thumbnail}
           primaryField={primaryField}
           pathname={pathname}
+          selectable={!!bulk}
           reorder={
             reorder
               ? {
@@ -369,6 +428,21 @@ export function CollectionTable<TData extends TableData>({
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="sticky -top-4 md:-top-6 z-20 bg-background hover:bg-background">
               {reorder && <TableHead className="p-2 h-10 w-8 border-b"><span className="sr-only">Reorder</span></TableHead>}
+              {bulk && (
+                <TableHead className="p-2 h-10 w-8 border-b">
+                  <Checkbox
+                    checked={
+                      table.getIsAllPageRowsSelected()
+                        ? true
+                        : table.getIsSomePageRowsSelected()
+                          ? "indeterminate"
+                          : false
+                    }
+                    onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                    aria-label="Select all the entries of the page"
+                  />
+                </TableHead>
+              )}
               {headerGroup.headers.map((header) => {
                 return (
                   <TableHead
@@ -416,6 +490,7 @@ export function CollectionTable<TData extends TableData>({
                 id={row.original.path}
                 enabled={reorderEnabled}
                 hint={reorderHint}
+                leading={bulk ? selectCell(row) : undefined}
                 onSortByPosition={
                   canSortByPosition && reorder
                     ? () => table.setSorting([{ id: reorder.field, desc: false }])
@@ -506,7 +581,7 @@ export function CollectionTable<TData extends TableData>({
             ))
           ) : (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={columns.length + (reorder ? 1 : 0)} className="text-center text-muted-foreground text-sm p-6">
+              <TableCell colSpan={columns.length + (reorder ? 1 : 0) + (bulk ? 1 : 0)} className="text-center text-muted-foreground text-sm p-6">
                 <span>No entries</span>
               </TableCell>
             </TableRow>

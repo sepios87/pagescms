@@ -249,6 +249,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
     return getFieldByPath(schema.fields, fieldName)?.type === "number" ? fieldName : undefined;
   }, [schema]);
   const [isReordering, setIsReordering] = useState(false);
+  const [isBulkBusy, setIsBulkBusy] = useState(false);
 
   // Image shown on the cards: `view.thumbnail` or else the first image field of
   // the entries. A path inside a list (e.g. "images.image") reads its first item.
@@ -617,6 +618,68 @@ export function Collection({ name, path }: { name: string; path?: string }) {
       mutate,
       name,
       reorderField,
+      rootCollectionKey,
+    ],
+  );
+
+  // Deletes or duplicates the entries ticked in the list, in a single commit.
+  // Resolves to true when it worked, so the list can clear its selection.
+  const handleBulk = useCallback(
+    async (action: "delete" | "duplicate", paths: string[]): Promise<boolean> => {
+      if (isBulkBusy || paths.length === 0) return false;
+
+      const shaByPath = new Map<string, string>(
+        data.filter((item) => item.type === "file").map((item) => [item.path, item.sha]),
+      );
+      setIsBulkBusy(true);
+
+      const bulkPromise = (async () => {
+        const response = await fetch(
+          `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collections/${encodeURIComponent(name)}/bulk`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action,
+              path: collectionPath,
+              entries: paths.map((entryPath) => ({ path: entryPath, sha: shaByPath.get(entryPath) })),
+            }),
+          },
+        );
+        const result = await requireApiSuccess<any>(response, "The action failed");
+
+        if (action === "delete") {
+          setData((prevData) => prevData.filter((item) => !paths.includes(item.path)));
+        }
+        // The server updated its cache: reload the list to show the result
+        await mutate(rootCollectionKey);
+        return result;
+      })();
+
+      toast.promise(bulkPromise, {
+        loading: action === "delete" ? "Deleting the entries…" : "Duplicating the entries…",
+        success: (result: any) => result.message,
+        error: (error: any) => error.message,
+      });
+
+      try {
+        await bulkPromise;
+        return true;
+      } catch {
+        return false;
+      } finally {
+        setIsBulkBusy(false);
+      }
+    },
+    [
+      collectionPath,
+      config.branch,
+      config.owner,
+      config.repo,
+      data,
+      isBulkBusy,
+      mutate,
+      name,
       rootCollectionKey,
     ],
   );
@@ -1226,6 +1289,11 @@ export function Collection({ name, path }: { name: string; path?: string }) {
       isTree={schema.view?.layout === "tree"}
       primaryField={primaryField}
       layout={layout}
+      bulk={
+        schema.view?.layout !== "tree" && (canDelete || canCreate)
+          ? { canDelete, canDuplicate: canCreate, busy: isBulkBusy, onAction: handleBulk }
+          : undefined
+      }
       thumbnail={
         thumbnail
           ? {
