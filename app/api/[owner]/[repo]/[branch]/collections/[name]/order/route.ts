@@ -188,16 +188,18 @@ export async function POST(
     const newShas = new Map(changes.map((change) => [change.path, gitBlobSha(change.content)]));
 
     const timestamp = Date.now();
-    await Promise.all(changes.map((change) =>
-      updateFileCache("collection", params.owner, params.repo, params.branch, {
+    // One at a time: each call also writes the folder's cache meta row, which has
+    // a unique index, so concurrent calls would collide on it.
+    for (const change of changes) {
+      await updateFileCache("collection", params.owner, params.repo, params.branch, {
         type: "modify",
         path: change.path,
         sha: newShas.get(change.path)!,
         content: change.content,
         size: Buffer.byteLength(change.content),
         commit: { sha: commitSha, timestamp },
-      })
-    ));
+      });
+    }
     return Response.json({
       status: "success",
       message: `Order saved (${changes.length} ${changes.length === 1 ? "entry" : "entries"} updated).`,
