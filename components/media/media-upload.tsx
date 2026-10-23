@@ -9,6 +9,7 @@ import { getSchemaByName } from "@/lib/schema";
 import { cn } from "@/lib/utils";
 import { requireApiSuccess } from "@/lib/api-client";
 import type { FileSaveData } from "@/types/api";
+import { formatFileSize, resizeImage } from "@/lib/utils/image-resize";
 
 interface MediaUploadContextValue {
   handleFiles: (files: File[]) => Promise<void>;
@@ -72,7 +73,15 @@ function MediaUploadRoot({ children, path, onUpload, media, extensions, multiple
           rename ?? configMedia?.rename,
         );
 
+        // Shown after the name of the file when it was made lighter
+        let resizeNote = "";
+
         const uploadPromise = (async () => {
+          const prepared = await resizeImage(file, configMedia?.resize);
+          if (prepared !== file) {
+            resizeNote = ` (${formatFileSize(file.size)} → ${formatFileSize(prepared.size)})`;
+          }
+
           const content = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => {
@@ -80,7 +89,7 @@ function MediaUploadRoot({ children, path, onUpload, media, extensions, multiple
               resolve(base64Content);
             };
             reader.onerror = () => reject(new Error("Failed to read file"));
-            reader.readAsDataURL(file);
+            reader.readAsDataURL(prepared);
           });
 
           const fullPath = joinPathSegments([path ?? "", uploadFilename]);
@@ -106,7 +115,7 @@ function MediaUploadRoot({ children, path, onUpload, media, extensions, multiple
           loading: `Uploading ${file.name}`,
           success: (savedEntry) => {
             onUpload?.(savedEntry);
-            return `Uploaded ${file.name}`;
+            return `Uploaded ${file.name}${resizeNote}`;
           },
           error: (error: unknown) => error instanceof Error ? error.message : "Upload failed",
         });
@@ -124,7 +133,7 @@ function MediaUploadRoot({ children, path, onUpload, media, extensions, multiple
     } catch (error) {
       console.error(error);
     }
-  }, [config, path, configMedia?.name, configMedia?.rename, onUpload, rename]);
+  }, [config, path, configMedia?.name, configMedia?.rename, configMedia?.resize, onUpload, rename]);
 
   const contextValue = useMemo(() => ({
     handleFiles,

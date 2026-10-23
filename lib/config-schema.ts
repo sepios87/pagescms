@@ -194,6 +194,32 @@ const MediaConfigObject = z
         }),
       ])
       .optional(),
+    resize: z
+      .object(
+        {
+          width: z
+            .number({ message: "'width' must be a number of pixels." })
+            .int({ message: "'width' must be a whole number of pixels." })
+            .positive({ message: "'width' must be greater than 0." })
+            .optional(),
+          height: z
+            .number({ message: "'height' must be a number of pixels." })
+            .int({ message: "'height' must be a whole number of pixels." })
+            .positive({ message: "'height' must be greater than 0." })
+            .optional(),
+          quality: z
+            .number({ message: "'quality' must be a number between 0.1 and 1." })
+            .min(0.1, { message: "'quality' must be between 0.1 and 1." })
+            .max(1, { message: "'quality' must be between 0.1 and 1." })
+            .optional(),
+        },
+        {
+          message:
+            "'resize' must be an object with 'width', 'height' and 'quality' attributes.",
+        },
+      )
+      .strict()
+      .optional(),
     commit: z
       .object(
         {
