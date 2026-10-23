@@ -202,6 +202,7 @@ export function CollectionCards({
   pathname,
   reorder,
   selectable,
+  bulkBar,
 }: {
   table: Table<CardRow>;
   thumbnail: CardsThumbnail;
@@ -210,6 +211,8 @@ export function CollectionCards({
   reorder?: CardsReorder;
   // Let the user tick the cards (for the bulk actions)
   selectable?: boolean;
+  // Shown instead of the sort line while cards are ticked
+  bulkBar?: ReactNode;
 }) {
   const sortableColumns = table
     .getAllLeafColumns()
@@ -219,8 +222,10 @@ export function CollectionCards({
 
   return (
     <div className="space-y-4">
-      {(sortableColumns.length > 0 || selectable) && (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
+      {bulkBar ? (
+        <div className="flex min-h-8 items-center">{bulkBar}</div>
+      ) : (sortableColumns.length > 0 || selectable) && (
+        <div className="flex min-h-8 flex-wrap items-center gap-2 text-sm">
           {selectable && (
             <label className="mr-2 flex items-center gap-2 text-muted-foreground">
               <Checkbox

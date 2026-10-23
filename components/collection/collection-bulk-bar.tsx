@@ -2,6 +2,7 @@
 
 import { Copy, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,9 +15,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Actions on the entries ticked in a collection (delete, duplicate)
+// Actions on the entries ticked in a collection (delete, duplicate). It takes the
+// place of the header of the list as soon as an entry is ticked, so nothing moves.
 export function CollectionBulkBar({
   count,
+  allChecked,
+  onToggleAll,
   canDelete,
   canDuplicate,
   busy,
@@ -25,6 +29,9 @@ export function CollectionBulkBar({
   onClear,
 }: {
   count: number;
+  // State of the "select all" checkbox (the entries of the page)
+  allChecked: boolean | "indeterminate";
+  onToggleAll: (checked: boolean) => void;
   canDelete: boolean;
   canDuplicate: boolean;
   busy: boolean;
@@ -34,10 +41,15 @@ export function CollectionBulkBar({
 }) {
   return (
     <div
-      className="sticky bottom-4 z-30 flex flex-wrap items-center gap-2 rounded-lg border bg-background px-3 py-2 text-sm shadow-lg"
+      className="flex min-h-8 w-full items-center gap-2 text-sm"
       role="toolbar"
       aria-label="Actions on the selected entries"
     >
+      <Checkbox
+        checked={allChecked}
+        onCheckedChange={(value) => onToggleAll(!!value)}
+        aria-label="Select all the entries of the page"
+      />
       <span className="mr-auto font-medium">
         {count} {count === 1 ? "entry" : "entries"} selected
       </span>
