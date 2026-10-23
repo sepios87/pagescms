@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import {
   Fragment,
   memo,
@@ -286,7 +287,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
         path: fetchPath,
         fields: requestedFieldPaths.join(","),
       });
-      return `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collections/${encodeURIComponent(name)}?${params.toString()}`;
+      return `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collections/${encodeURIComponent(name)}?${params.toString()}`;
     },
     [config.branch, config.owner, config.repo, name, requestedFieldPaths],
   );
@@ -488,7 +489,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
 
       const savePromise = (async () => {
         const response = await fetch(
-          `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collections/${encodeURIComponent(name)}/order`,
+          `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collections/${encodeURIComponent(name)}/order`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -549,7 +550,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
         const renamePromise = new Promise(async (resolve, reject) => {
           try {
             const response = await fetch(
-              `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/files/${encodeURIComponent(normalizedPath)}/rename`,
+              `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(normalizedPath)}/rename`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -575,7 +576,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
           loading: `Renaming "${path}" to "${newPath}"`,
           success: (data: any) => {
             router.push(
-              `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new?parent=${encodeURIComponent(getParentPath(normalizedNewPath))}`,
+              `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/new?parent=${encodeURIComponent(getParentPath(normalizedNewPath))}`,
             );
             return data.message;
           },
@@ -623,7 +624,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
                 return (
                   <Link
                     className="font-medium truncate"
-                    href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeURIComponent(row.original.path)}`}
+                    href={`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeURIComponent(row.original.path)}`}
                   >
                     {CellView}
                   </Link>
@@ -649,7 +650,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
                 className={cn(
                   buttonVariants({ variant: "outline", size: "sm" }),
                 )}
-                href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${name}/edit/${encodeURIComponent(row.original.path)}`}
+                href={`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${name}/edit/${encodeURIComponent(row.original.path)}`}
               >
                 Edit
               </Link>
@@ -737,10 +738,10 @@ export function Collection({ name, path }: { name: string; path?: string }) {
                     )}
                     href={
                       row.original.isNode
-                        ? `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new?parent=${encodeURIComponent(row.original.parentPath)}`
+                        ? `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/new?parent=${encodeURIComponent(row.original.parentPath)}`
                         : row.original.type === "dir"
-                          ? `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new?parent=${encodeURIComponent(row.original.path)}`
-                          : `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new?parent=${encodeURIComponent(row.original.path)}`
+                          ? `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/new?parent=${encodeURIComponent(row.original.path)}`
+                          : `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/new?parent=${encodeURIComponent(row.original.path)}`
                     }
                   >
                     <Plus className="size-4" />
@@ -907,7 +908,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
     [schema.view?.layout],
   );
 
-  const addEntryHref = `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new${
+  const addEntryHref = `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/new${
     schema.view?.layout !== "tree" && path && path !== schema.path
       ? `?parent=${encodeURIComponent(path)}`
       : ""
@@ -1118,7 +1119,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
           ) : (
             <Link
               className={buttonVariants({ variant: "default" })}
-              href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/settings`}
+              href={`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/settings`}
             >
               Go to settings
             </Link>

@@ -35,6 +35,19 @@ export function proxy(request: NextRequest) {
 	const returnTo = `${request.nextUrl.pathname}${request.nextUrl.search}`;
 	requestHeaders.set("x-return-to", returnTo);
 
+	// A branch name with a slash arrives double-encoded (%252F, see
+	// lib/utils/branch.ts): restore the single encoding the routes expect.
+	const routedPathname = pathname.replace(/%252F/gi, "%2F");
+	if (routedPathname !== pathname) {
+		const url = request.nextUrl.clone();
+		url.pathname = routedPathname;
+		return NextResponse.rewrite(url, {
+			request: {
+				headers: requestHeaders,
+			},
+		});
+	}
+
 	return NextResponse.next({
 		request: {
 			headers: requestHeaders,

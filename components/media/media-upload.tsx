@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import { useRef, cloneElement, useMemo, useCallback, createContext, useContext, useState } from "react";
 import { useConfig } from "@/contexts/config-context";
 import { getUploadFileName, joinPathSegments } from "@/lib/utils/file";
@@ -83,7 +84,7 @@ function MediaUploadRoot({ children, path, onUpload, media, extensions, multiple
           });
 
           const fullPath = joinPathSegments([path ?? "", uploadFilename]);
-          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/files/${encodeURIComponent(fullPath)}`, {
+          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(fullPath)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

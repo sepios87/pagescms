@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import { useState } from "react";
 import { useConfig } from "@/contexts/config-context";
 import { joinPathSegments, normalizePath } from "@/lib/utils/file";
@@ -60,7 +61,7 @@ const FolderCreate = ({
         status: string;
         message?: string;
         data: FolderCreateResult;
-      }> = fetch(`/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/files/${encodeURIComponent(fullNewPath + "/.gitkeep")}`, {
+      }> = fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(fullNewPath + "/.gitkeep")}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

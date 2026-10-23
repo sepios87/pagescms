@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -54,14 +55,14 @@ const RepoNav = ({
         ? <FileStack className="h-5 w-5 mr-2" />
         : <FileText className="h-5 w-5 mr-2" />
       ,
-      href: `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/${item.type}/${encodeURIComponent(item.name)}`,
+      href: `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/${item.type}/${encodeURIComponent(item.name)}`,
       label: item.label || item.name,
     })) || [];
 
     const mediaItems = configObject.media?.map((item: any) => ({
       key: item.name || "media",
       icon: <FolderOpen className="h-5 w-5 mr-2" />,
-      href: `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/media/${item.name}`,
+      href: `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/media/${item.name}`,
       label: item.label || item.name || "Media"
     })) || [];
 
@@ -71,7 +72,7 @@ const RepoNav = ({
       ? {
         key: "configuration",
         icon: <Settings className="h-5 w-5 mr-2" />,
-        href: `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/configuration`,
+        href: `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/configuration`,
         label: "Configuration"
       }
       : null;
@@ -80,7 +81,7 @@ const RepoNav = ({
       ? {
         key: "collaborators",
         icon: <Users className="h-5 w-5 mr-2" />,
-        href: `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collaborators`,
+        href: `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collaborators`,
         label: "Collaborators"
       }
       : null;

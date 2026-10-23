@@ -4,6 +4,7 @@
  * Runs client-side with some temporary caching.
  */
 
+import { encodeBranch } from "@/lib/utils/branch";
 import {
   decodePathSafely,
   getFileName,
@@ -85,7 +86,7 @@ const getRawUrl = async (
       
       if (!requests[parentFullPath]) {
         requests[parentFullPath] = fetch(
-          `/api/${owner}/${repo}/${encodeURIComponent(branch)}/media/${encodeURIComponent(name)}/${encodeURIComponent(parentPath)}?nocache=true`
+          `/api/${owner}/${repo}/${encodeBranch(branch)}/media/${encodeURIComponent(name)}/${encodeURIComponent(parentPath)}?nocache=true`
         )
           .then((response) => requireApiSuccess<any>(response, "Failed to fetch media"))
           .catch(err => {

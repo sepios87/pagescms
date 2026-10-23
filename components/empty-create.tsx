@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader as LucideLoader } from "lucide-react";
@@ -30,7 +31,7 @@ const EmptyCreate = ({
   let path = "";
   let content: string | Record<string, any> = "";
   let toCreate = "";
-  let redirectTo = `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}`;
+  let redirectTo = `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}`;
 
   if (type === "settings") {
     path = ".pages.yml";
@@ -72,7 +73,7 @@ const EmptyCreate = ({
     const toastId = toast.loading(`Creating ${toCreate}...`);
 
     try {
-      const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/files/${encodeURIComponent(normalizePath(path))}`, {
+      const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(normalizePath(path))}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

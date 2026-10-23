@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import Link from "next/link";
 import { forwardRef, useCallback, useEffect, useMemo, useState } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -323,7 +324,7 @@ export function ActionsPage({
 
   const loadRuns = useCallback(async () => {
     const response = await fetch(
-      `/api/${owner}/${repo}/${encodeURIComponent(branch)}/actions?all=1`,
+      `/api/${owner}/${repo}/${encodeBranch(branch)}/actions?all=1`,
     );
     const payload = await requireApiSuccess<{ data: ActionRunSummary[] }>(
       response,
@@ -338,7 +339,7 @@ export function ActionsPage({
   ) => {
     try {
       const response = await fetch(
-        `/api/${owner}/${repo}/${encodeURIComponent(branch)}/actions/${run.id}`,
+        `/api/${owner}/${repo}/${encodeBranch(branch)}/actions/${run.id}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

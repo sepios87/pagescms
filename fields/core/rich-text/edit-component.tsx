@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import {
   forwardRef,
   useCallback,
@@ -790,7 +791,7 @@ const EditComponent = forwardRef(
         ]);
 
         const response = await fetch(
-          `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/files/${encodeURIComponent(targetPath)}`,
+          `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(targetPath)}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

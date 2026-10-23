@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import useSWR from "swr";
 import { Badge } from "@/components/ui/badge";
 import { useConfig } from "@/contexts/config-context";
@@ -54,7 +55,7 @@ const ViewComponent = ({ value, field }: { value: unknown; field: Field }) => {
 
   const { data } = useSWR(
     config && collection && selectedValues.length > 0
-      ? `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/references/${collectionName}?${params?.toString()}`
+      ? `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/references/${collectionName}?${params?.toString()}`
       : null,
     fetcher
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRepo } from "@/contexts/repo-context";
@@ -40,7 +41,7 @@ export function RepoBranches() {
         try {
           const newBranch = search;
 
-          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/branches`, {
+          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/branches`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -94,7 +95,7 @@ export function RepoBranches() {
                   : "hover:bg-accent",
                 "inline-flex items-center rounded-lg px-3 py-2 transition-all ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               )}
-              href={`/${owner}/${repo}/${encodeURIComponent(branch)}`}
+              href={`/${owner}/${repo}/${encodeBranch(branch)}`}
             >
               <span className="truncate">{branch}</span>
               {branch === config?.branch && <Check className="h-4 w-4 ml-auto opacity-50" />}

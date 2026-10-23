@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import { useMemo, useState } from "react";
 import { useConfig } from "@/contexts/config-context";
 import { getFileName, getParentPath, getRelativePath, joinPathSegments, normalizePath } from "@/lib/utils/file";
@@ -81,7 +82,7 @@ export function FileOptions({
   // Creates a copy of the entry next to the original ("my-page-copy.md"). If the
   // name is taken, the files API picks the next free one ("my-page-copy-1.md").
   const handleDuplicate = () => {
-    const apiUrl = `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}`;
+    const apiUrl = `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}`;
 
     const duplicatePromise = (async () => {
       const entryResponse = await fetch(
@@ -128,7 +129,7 @@ export function FileOptions({
           });
           if (name) params.set("name", name);
 
-          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/files/${encodeURIComponent(normalizedPath)}?${params.toString()}`, {
+          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(normalizedPath)}?${params.toString()}`, {
             method: "DELETE",
           });
 
@@ -162,7 +163,7 @@ export function FileOptions({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" portalProps={portalProps}>
             <DropdownMenuItem asChild>
-              <a href={`https://github.com/${config.owner}/${config.repo}/blob/${encodeURIComponent(config.branch)}/${path}`} target="_blank">
+              <a href={`https://github.com/${config.owner}/${config.repo}/blob/${encodeBranch(config.branch)}/${path}`} target="_blank">
                 View on GitHub
                 <ArrowUpRight className="size-3 text-muted-foreground ml-auto" />
               </a>

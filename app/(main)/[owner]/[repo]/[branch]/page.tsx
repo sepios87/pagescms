@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConfig } from "@/contexts/config-context";
@@ -18,11 +19,11 @@ export default function Page() {
 
   useEffect(() => {
     if (config?.object.content?.[0]) {
-      router.replace(`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/${config.object.content[0].type}/${config.object.content[0].name}`);
+      router.replace(`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/${config.object.content[0].type}/${config.object.content[0].name}`);
     } else if (config?.object.media) {
-      router.replace(`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/media/${config.object.media[0].name}`);
+      router.replace(`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/media/${config.object.media[0].name}`);
     } else if (hasGithubIdentity(user) && isConfigEnabled(config?.object)) {
-      router.replace(`/${config?.owner}/${config?.repo}/${encodeURIComponent(config!.branch)}/configuration`);
+      router.replace(`/${config?.owner}/${config?.repo}/${encodeBranch(config!.branch)}/configuration`);
     } else {
       setError(true);
     }
@@ -39,7 +40,7 @@ export default function Page() {
             <EmptyContent>
               <Link
                 className={buttonVariants({ variant: "default" })}
-                href={`https://github.com/${config?.owner}/${config?.repo}/edit/${encodeURIComponent(config!.branch)}/.pages.yml`}
+                href={`https://github.com/${config?.owner}/${config?.repo}/edit/${encodeBranch(config!.branch)}/.pages.yml`}
               >
                 Edit configuration on GitHub
               </Link>

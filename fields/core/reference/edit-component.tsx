@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import { useEffect, useMemo, useState } from "react";
 import { Loader } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -78,7 +79,7 @@ const EditComponent = (props: any) => {
   const collectionName = typeof field.options?.collection === "string" ? field.options.collection : null;
   const collectionPath = config && collectionName ? getSchemaByName(config.object, collectionName)?.path || null : null;
   const url = config && collectionName
-    ? `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/references/${collectionName}`
+    ? `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/references/${collectionName}`
     : null;
   const searchFields = typeof field.options?.search === "string" ? field.options.search : "name";
   const valueTemplate = typeof field.options?.value === "string" ? field.options.value : "{path}";

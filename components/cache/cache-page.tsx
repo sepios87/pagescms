@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -184,7 +185,7 @@ export function CachePage({
     setLoading(true);
     try {
       const response = await fetch(
-        `/api/${owner}/${repo}/${encodeURIComponent(branch)}/cache`,
+        `/api/${owner}/${repo}/${encodeBranch(branch)}/cache`,
       );
       const payload = await requireApiSuccess<{
         status: string;
@@ -208,7 +209,7 @@ export function CachePage({
       const loadingId = toast.loading("Updating cache...");
       try {
         const response = await fetch(
-          `/api/${owner}/${repo}/${encodeURIComponent(branch)}/cache`,
+          `/api/${owner}/${repo}/${encodeBranch(branch)}/cache`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

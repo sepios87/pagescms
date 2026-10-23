@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useConfig } from "@/contexts/config-context";
@@ -56,7 +57,7 @@ export function RepoDropdown({
   }, [branches]);
 
   const handleBranchChange = (branch: string) => {
-    router.push(`/${owner}/${repo}/${encodeURIComponent(branch)}`);
+    router.push(`/${owner}/${repo}/${encodeBranch(branch)}`);
   };
 
   return (

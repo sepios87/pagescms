@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import { Fragment, memo, type ReactNode, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -286,7 +287,7 @@ const MediaView = ({
   }, []);
   
   const buildMediaApiUrl = useCallback((targetPath: string): string => (
-    `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/media/${encodeURIComponent(mediaConfig.name)}/${encodeURIComponent(targetPath)}`
+    `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/media/${encodeURIComponent(mediaConfig.name)}/${encodeURIComponent(targetPath)}`
   ), [config.branch, config.owner, config.repo, mediaConfig.name]);
 
   const mediaKey = useMemo(() => buildMediaApiUrl(path), [buildMediaApiUrl, path]);
@@ -624,7 +625,7 @@ const MediaView = ({
         <EmptyContent>
           <Link
             className={buttonVariants({ variant: "default" })}
-            href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/configuration`}
+            href={`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/configuration`}
           >
             Open configuration
           </Link>

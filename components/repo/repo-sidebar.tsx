@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeBranch } from "@/lib/utils/branch";
 import {
   Fragment,
   useCallback,
@@ -146,7 +147,7 @@ function RepoSwitcher() {
   }, [loadRecentRepos]);
 
   const handleBranchChange = (branch: string) => {
-    router.push(`/${owner}/${repo}/${encodeURIComponent(branch)}`);
+    router.push(`/${owner}/${repo}/${encodeBranch(branch)}`);
   };
 
   return (
@@ -229,7 +230,7 @@ function RepoSwitcher() {
                     key={`${visit.owner}/${visit.repo}/${visit.branch}`}
                   >
                     <Link
-                      href={`/${visit.owner}/${visit.repo}/${encodeURIComponent(visit.branch)}`}
+                      href={`/${visit.owner}/${visit.repo}/${encodeBranch(visit.branch)}`}
                     >
                       <img
                         src={`https://github.com/${visit.owner}.png`}
@@ -330,7 +331,7 @@ export function RepoSidebar() {
       items.push({
         key: "admin-cache",
         label: "Cache",
-        href: `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/cache`,
+        href: `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/cache`,
         icon: <Database className="size-4" />,
       });
     }
@@ -339,14 +340,14 @@ export function RepoSidebar() {
       items.push({
         key: "admin-actions",
         label: "Actions",
-        href: `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/actions`,
+        href: `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/actions`,
         icon: <ListVideo className="size-4" />,
       });
 
       items.push({
         key: "admin-collaborators",
         label: "Collaborators",
-        href: `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collaborators`,
+        href: `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collaborators`,
         icon: <Users className="size-4" />,
       });
     }
@@ -355,7 +356,7 @@ export function RepoSidebar() {
       items.push({
         key: "admin-configuration",
         label: "Configuration",
-        href: `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/configuration`,
+        href: `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/configuration`,
         icon: <Settings className="size-4" />,
       });
     }
@@ -371,9 +372,9 @@ export function RepoSidebar() {
     (node: NavigationNode) => {
       if (!config) return "#";
       if (node.type === "media") {
-        return `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/media/${encodeURIComponent(node.name)}`;
+        return `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/media/${encodeURIComponent(node.name)}`;
       }
-      return `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/${node.type}/${encodeURIComponent(node.name)}`;
+      return `/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/${node.type}/${encodeURIComponent(node.name)}`;
     },
     [config],
   );
