@@ -26,6 +26,7 @@ import {
 } from "@/lib/schema";
 import { Field } from "@/types/field";
 import { Button } from "@/components/ui/button";
+import { useEntryDraft } from "@/hooks/use-entry-draft";
 import { cn } from "@/lib/utils";
 import {
   Form,
@@ -1034,6 +1035,7 @@ const EntryForm = ({
   filePath,
   onDirtyChange,
   onChangeRegistered,
+  draftKey = null,
 }: {
   fields: Field[];
   contentObject?: Record<string, unknown>;
@@ -1041,6 +1043,8 @@ const EntryForm = ({
   filePath?: React.ReactNode;
   onDirtyChange?: (isDirty: boolean) => void;
   onChangeRegistered?: () => void;
+  // Where the unsaved changes are kept in this browser (null: no draft)
+  draftKey?: string | null;
 }) => {
   const zodSchema = useMemo(() => {
     return generateZodSchema(fields);
@@ -1063,6 +1067,12 @@ const EntryForm = ({
   useEffect(() => {
     onDirtyChange?.(form.formState.isDirty);
   }, [form.formState.isDirty, onDirtyChange]);
+
+  const { pendingDraft, restore: restoreDraft, discard: discardDraft } = useEntryDraft({
+    storageKey: draftKey,
+    form,
+    defaultValues,
+  });
 
   const beforeSubmitHooksRef = useRef<Map<string, BeforeSubmitHook>>(new Map());
 
@@ -1165,6 +1175,23 @@ const EntryForm = ({
         onSubmit={handleFormSubmit}
         className="w-full max-w-screen-md mx-auto grid items-start gap-6"
       >
+        {pendingDraft && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm"
+          >
+            <span className="mr-auto">
+              Unsaved changes from {new Date(pendingDraft.savedAt).toLocaleString()} were
+              found in this browser.
+            </span>
+            <Button type="button" size="sm" variant="outline" onClick={restoreDraft}>
+              Restore
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={discardDraft}>
+              Discard
+            </Button>
+          </div>
+        )}
         {filePath && (
           <div className="space-y-2 overflow-hidden">
             <FormLabel>Filename</FormLabel>

@@ -66,6 +66,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner";
 import { EllipsisVertical, History, Lock, LockOpen, Save } from "lucide-react";
 import useSWR, { useSWRConfig } from "swr";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes";
 
 type LintView = {
   state: {
@@ -425,6 +426,14 @@ export function Entry({
   };
 
   const isBusy = isLoading || isSaving;
+
+  // Changes that aren't saved yet: warn before the page is left
+  const hasUnsavedChanges =
+    !isSaving &&
+    (isFormDirty
+      || hasRegisteredChanges
+      || (showFilenameField && filenameFieldMode === "enabled" && isFilenameUnlocked && filenameChanged));
+  useUnsavedChangesGuard(hasUnsavedChanges);
 
   useEffect(() => {
     const handleSaveShortcut = (event: KeyboardEvent) => {
@@ -881,6 +890,11 @@ export function Entry({
             : undefined
         }
         onDirtyChange={setIsFormDirty}
+        draftKey={
+          name
+            ? `pagescms:draft:${config.owner}/${config.repo}/${config.branch}/${name}/${path ?? "new"}`
+            : null
+        }
         onChangeRegistered={() => {
           changeVersionRef.current += 1;
           setHasRegisteredChanges(true);
