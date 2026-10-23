@@ -41,6 +41,7 @@ import {
 } from "@/lib/utils/file";
 import type { ApiResponse, FileSaveData } from "@/types/api";
 import type { Field } from "@/types/field";
+import { resizeImage, type ResizeOptions } from "@/lib/utils/image-resize";
 import "./edit-component.css";
 
 type MediaSchema = {
@@ -49,6 +50,7 @@ type MediaSchema = {
   output: string;
   extensions?: string[];
   rename?: boolean | "safe" | "random";
+  resize?: ResizeOptions;
 };
 
 type FieldOptions = {
@@ -773,12 +775,13 @@ const EditComponent = forwardRef(
           );
         }
 
+        const prepared = await resizeImage(file, mediaConfig.resize);
         const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result ?? ""));
           reader.onerror = () =>
             reject(new Error("Failed to read image file."));
-          reader.readAsDataURL(file);
+          reader.readAsDataURL(prepared);
         });
         const content = dataUrl.replace(/^(.+,)/, "");
         const uploadFilename = getUploadFileName(
