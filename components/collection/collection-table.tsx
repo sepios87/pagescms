@@ -293,6 +293,29 @@ export function CollectionTable<TData extends TableData>({
     if (done) table.resetRowSelection();
   };
 
+  // Takes the place of the header of the list (or of the sort line of the cards)
+  // while entries are ticked
+  const bulkBar =
+    bulk && selectedPaths.length > 0 ? (
+      <CollectionBulkBar
+        count={selectedPaths.length}
+        allChecked={
+          table.getIsAllPageRowsSelected()
+            ? true
+            : table.getIsSomePageRowsSelected()
+              ? "indeterminate"
+              : false
+        }
+        onToggleAll={(checked) => table.toggleAllPageRowsSelected(checked)}
+        canDelete={bulk.canDelete}
+        canDuplicate={bulk.canDuplicate}
+        busy={bulk.busy}
+        onDelete={() => runBulk("delete")}
+        onDuplicate={() => runBulk("duplicate")}
+        onClear={() => table.resetRowSelection()}
+      />
+    ) : null;
+
   const selectCell = (row: Row<Record<string, any>>) => (
     <TableCell className="p-2 border-b py-0 h-12 w-8">
       {row.original.type === "file" && (
@@ -399,6 +422,7 @@ export function CollectionTable<TData extends TableData>({
           primaryField={primaryField}
           pathname={pathname}
           selectable={!!bulk}
+          bulkBar={bulkBar}
           reorder={
             reorder
               ? {
@@ -416,6 +440,11 @@ export function CollectionTable<TData extends TableData>({
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="sticky -top-4 md:-top-6 z-20 bg-background hover:bg-background">
+              {bulkBar ? (
+                <TableHead colSpan={columns.length + (reorder ? 1 : 0) + 1} className="px-2 py-0 h-10 border-b">
+                  {bulkBar}
+                </TableHead>
+              ) : (<>
               {reorder && <TableHead className="p-2 h-10 w-8 border-b"><span className="sr-only">Reorder</span></TableHead>}
               {bulk && (
                 <TableHead className="p-2 h-10 w-8 border-b">
@@ -466,6 +495,7 @@ export function CollectionTable<TData extends TableData>({
                   </TableHead>
                 )
               })}
+              </>)}
             </TableRow>
           ))}
         </TableHeader>
@@ -627,18 +657,6 @@ export function CollectionTable<TData extends TableData>({
             </PaginationContent>
           </Pagination>
         </footer>
-      )}
-      {/* After the list, and sticky: it appears without moving what is above it */}
-      {bulk && selectedPaths.length > 0 && (
-        <CollectionBulkBar
-          count={selectedPaths.length}
-          canDelete={bulk.canDelete}
-          canDuplicate={bulk.canDuplicate}
-          busy={bulk.busy}
-          onDelete={() => runBulk("delete")}
-          onDuplicate={() => runBulk("duplicate")}
-          onClear={() => table.resetRowSelection()}
-        />
       )}
     </div>
   )
