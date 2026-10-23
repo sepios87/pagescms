@@ -28,6 +28,7 @@ import {
   getSchemaByName,
   getPrimaryField,
   getFieldByPath,
+  findNestedFieldPath,
   safeAccess,
   setByPath,
 } from "@/lib/schema";
@@ -78,7 +79,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EllipsisVertical, FolderPlus, Plus, Search } from "lucide-react";
+import { EllipsisVertical, FolderPlus, LayoutGrid, LayoutList, Plus, Search } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -90,6 +91,21 @@ type GroupTrailItem = {
   label?: string | null;
 };
 
+type CollectionLayout = "list" | "cards";
+
+// The layout picked by the user is remembered per collection, in this browser
+const layoutStorageKey = (owner: string, repo: string, name: string) =>
+  `pagescms:collection-layout:${owner}/${repo}/${name}`;
+
+const readStoredLayout = (key: string): CollectionLayout | null => {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value === "list" || value === "cards" ? value : null;
+  } catch {
+    return null;
+  }
+};
+
 const CollectionHeaderActions = memo(function CollectionHeaderActions({
   addEntryHref,
   actionNode,
@@ -99,6 +115,8 @@ const CollectionHeaderActions = memo(function CollectionHeaderActions({
   showFolderCreate,
   onFolderCreate,
   onSearchChange,
+  layout,
+  onLayoutChange,
 }: {
   addEntryHref: string;
   actionNode?: ReactNode;
@@ -108,6 +126,9 @@ const CollectionHeaderActions = memo(function CollectionHeaderActions({
   showFolderCreate: boolean;
   onFolderCreate: (entry: any) => void;
   onSearchChange: (value: string) => void;
+  // Set when the collection can be displayed as a list or as cards
+  layout?: CollectionLayout;
+  onLayoutChange?: (layout: CollectionLayout) => void;
 }) {
   const [searchInput, setSearchInput] = useState("");
 
@@ -128,6 +149,30 @@ const CollectionHeaderActions = memo(function CollectionHeaderActions({
           placeholder="Search entries..."
         />
       </div>
+      {layout && onLayoutChange && (
+        <ButtonGroup>
+          {([
+            ["list", "List", LayoutList],
+            ["cards", "Cards", LayoutGrid],
+          ] as const).map(([value, label, Icon]) => (
+            <Tooltip key={value}>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={layout === value ? "secondary" : "outline"}
+                  size="icon"
+                  aria-label={`${label} view`}
+                  aria-pressed={layout === value}
+                  onClick={() => onLayoutChange(value)}
+                >
+                  <Icon />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{label} view</TooltipContent>
+            </Tooltip>
+          ))}
+        </ButtonGroup>
+      )}
       {showFolderCreate && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -205,6 +250,40 @@ export function Collection({ name, path }: { name: string; path?: string }) {
   }, [schema]);
   const [isReordering, setIsReordering] = useState(false);
 
+  // Image shown on the cards: `view.thumbnail` or else the first image field of
+  // the entries. A path inside a list (e.g. "images.image") reads its first item.
+  const thumbnail = useMemo(() => {
+    if (!schema.fields || schema.view?.layout === "tree") return undefined;
+    const thumbnailPath: string | undefined =
+      schema.view?.thumbnail ||
+      findNestedFieldPath(schema.fields, (field: any) => field.type === "image");
+    if (!thumbnailPath) return undefined;
+    const field = getFieldByPath(schema.fields, thumbnailPath);
+    return field?.type === "image" ? { path: thumbnailPath, field } : undefined;
+  }, [schema]);
+
+  // List or cards: the user's choice (kept in this browser), else the configured one
+  const canSwitchLayout = !!thumbnail;
+  const defaultLayout: CollectionLayout =
+    canSwitchLayout && schema.view?.layout === "cards" ? "cards" : "list";
+  const [storedLayout, setStoredLayout] = useState<CollectionLayout | null>(null);
+  const storageKey = layoutStorageKey(config.owner, config.repo, name);
+  useEffect(() => {
+    setStoredLayout(readStoredLayout(storageKey));
+  }, [storageKey]);
+  const layout: CollectionLayout = canSwitchLayout ? (storedLayout ?? defaultLayout) : "list";
+  const handleLayoutChange = useCallback(
+    (value: CollectionLayout) => {
+      setStoredLayout(value);
+      try {
+        window.localStorage.setItem(storageKey, value);
+      } catch {
+        // Private mode or blocked storage: the choice just isn't remembered
+      }
+    },
+    [storageKey],
+  );
+
   const viewFields = useMemo(() => {
     let pathAndFieldArray: any[] = [];
     if (schema.fields) {
@@ -274,8 +353,9 @@ export function Collection({ name, path }: { name: string; path?: string }) {
   const requestedFieldPaths = useMemo(() => {
     const paths = new Set<string>(["name", "path", primaryField]);
     viewFields.forEach((item: any) => paths.add(item.path));
+    if (thumbnail) paths.add(thumbnail.path);
     return Array.from(paths);
-  }, [primaryField, viewFields]);
+  }, [primaryField, viewFields, thumbnail]);
 
   const handleTableSearchChange = useCallback((value: string) => {
     setTableSearch(value);
@@ -609,6 +689,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
                 path === primaryField
                   ? "truncate w-full min-w-[12rem] max-w-[1px]"
                   : "",
+              fieldType: field.type,
             },
             cell: ({ cell, row }: { cell: any; row: any }) => {
               const cellValue = cell.getValue();
@@ -1062,19 +1143,24 @@ export function Collection({ name, path }: { name: string; path?: string }) {
           showFolderCreate={schema.subfolders !== false && canCreate}
           onFolderCreate={handleFolderCreate}
           onSearchChange={handleTableSearchChange}
+          layout={canSwitchLayout ? layout : undefined}
+          onLayoutChange={canSwitchLayout ? handleLayoutChange : undefined}
         />
       </div>
     ),
     [
       addEntryHref,
       breadcrumbNode,
+      canSwitchLayout,
       collectionActions,
       collectionPath,
       config.branch,
       config.owner,
       config.repo,
       handleFolderCreate,
+      handleLayoutChange,
       handleTableSearchChange,
+      layout,
       canCreate,
       name,
       schema.format,
@@ -1139,6 +1225,15 @@ export function Collection({ name, path }: { name: string; path?: string }) {
       path={path || schema.path}
       isTree={schema.view?.layout === "tree"}
       primaryField={primaryField}
+      layout={layout}
+      thumbnail={
+        thumbnail
+          ? {
+              path: thumbnail.path,
+              media: thumbnail.field.options?.media || config.object.media?.[0]?.name,
+            }
+          : undefined
+      }
       reorder={
         reorderField
           ? { field: reorderField, saving: isReordering, onReorder: handleReorder }

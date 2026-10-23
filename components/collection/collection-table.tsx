@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   flexRender,
@@ -38,10 +38,13 @@ import {
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { ArrowUp, ArrowDown, GripVertical, Loader, CircleMinus, CirclePlus, Folder, FolderOpen } from "lucide-react";
+import { CollectionCards, type CardsThumbnail } from "./collection-cards";
 
 declare module '@tanstack/react-table' {
   interface ColumnMeta<TData extends RowData, TValue> {
     className?: string;
+    // Type of the field the column shows
+    fieldType?: string;
   }
 }
 
@@ -180,6 +183,8 @@ export function CollectionTable<TData extends TableData>({
   path,
   isTree = false,
   primaryField,
+  layout = "list",
+  thumbnail,
   reorder
 }: {
   columns: any[],
@@ -192,6 +197,9 @@ export function CollectionTable<TData extends TableData>({
   path: string,
   isTree?: boolean,
   primaryField?: string,
+  // "cards" shows each entry as a card with its picture (needs a thumbnail)
+  layout?: "list" | "cards",
+  thumbnail?: CardsThumbnail,
   reorder?: TableReorder
 }) {
   const [expanded, setExpanded] = useState<ExpandedState>({});
@@ -267,6 +275,7 @@ export function CollectionTable<TData extends TableData>({
     : search
       ? "Clear the search to reorder"
       : "Click to sort by position, then drag to reorder";
+  const showCards = layout === "cards" && !!thumbnail && !isTree;
   const fileRowIds = table
     .getRowModel()
     .rows.filter((row) => row.original.type === "file")
@@ -332,10 +341,29 @@ export function CollectionTable<TData extends TableData>({
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        modifiers={[restrictToVerticalAxis]}
+        modifiers={showCards ? undefined : [restrictToVerticalAxis]}
         onDragEnd={handleDragEnd}
       >
-      <SortableContext items={fileRowIds} strategy={verticalListSortingStrategy}>
+      <SortableContext items={fileRowIds} strategy={showCards ? rectSortingStrategy : verticalListSortingStrategy}>
+      {showCards && thumbnail ? (
+        <CollectionCards
+          table={table}
+          thumbnail={thumbnail}
+          primaryField={primaryField}
+          pathname={pathname}
+          reorder={
+            reorder
+              ? {
+                  enabled: reorderEnabled,
+                  hint: reorderHint,
+                  onSortByPosition: canSortByPosition
+                    ? () => table.setSorting([{ id: reorder.field, desc: false }])
+                    : undefined,
+                }
+              : undefined
+          }
+        />
+      ) : (
       <Table className="border-separate border-spacing-0 text-sm">
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -485,6 +513,7 @@ export function CollectionTable<TData extends TableData>({
           )}
         </TableBody>
       </Table>
+      )}
       </SortableContext>
       </DndContext>
       {pageCount > 1 && (

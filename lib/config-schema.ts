@@ -553,10 +553,16 @@ const ContentLeafSchema = z
       .object(
         {
           layout: z
-            .enum(["tree", "list"], {
-              message: "'layout' must be either 'tree' or 'list'.",
+            .enum(["tree", "list", "cards"], {
+              message: "'layout' must be one of 'tree', 'list' or 'cards'.",
             })
             .optional(),
+          thumbnail: z
+            .string({
+              message: "'thumbnail' must be a string (the path of an image field).",
+            })
+            .optional()
+            .nullable(),
           node: z
             .union(
               [
@@ -664,7 +670,7 @@ const ContentLeafSchema = z
         },
         {
           message:
-            "'view' must be an object with 'fields', 'primary', 'sort', 'search', 'reorder' and 'default' attributes.",
+            "'view' must be an object with 'layout', 'thumbnail', 'fields', 'primary', 'sort', 'search', 'reorder' and 'default' attributes.",
         },
       )
       .strict()

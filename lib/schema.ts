@@ -481,6 +481,7 @@ export {
   sanitizeObject,
   getSchemaByName,
   getFieldByPath,
+  findNestedFieldPath,
   getPrimaryField,
   generateFilename,
   getDateFromFilename,
