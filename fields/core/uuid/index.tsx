@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { Field } from "@/types/field";
-import { EditComponent } from "./edit-component";
 
 const defaultValue = (): string => {
   return crypto.randomUUID();
@@ -16,4 +15,4 @@ const schema = (field: Field, configObject?: Record<string, any>) => {
 
 const label = "UUID";
 
-export { label, EditComponent, defaultValue, schema };
+export { label, defaultValue, schema };

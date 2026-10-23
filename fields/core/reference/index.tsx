@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { Field } from "@/types/field";
-import { EditComponent } from "./edit-component";
 import { ViewComponent } from "./view-component";
 
 const schema = (field: Field) => {
@@ -45,4 +44,4 @@ const schema = (field: Field) => {
 
 const label = "Reference";
 
-export { label, schema, EditComponent, ViewComponent };
+export { label, schema, ViewComponent };

@@ -17,7 +17,7 @@ import {
   useWatch,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { editComponents } from "@/fields/registry";
+import { editComponents } from "@/fields/edit-registry";
 import {
   initializeState,
   getDefaultValue,

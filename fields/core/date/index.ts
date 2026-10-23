@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { Field } from "@/types/field";
-import { EditComponent } from "./edit-component";
 import { ViewComponent } from "./view-component";
 import { parse, format, isValid, isBefore, isAfter } from "date-fns";
 
@@ -67,4 +66,4 @@ const schema = (field: Field) => {
   return zodSchema;
 };
 
-export { EditComponent, ViewComponent, schema, read, write, defaultValue };
+export { ViewComponent, schema, read, write, defaultValue };

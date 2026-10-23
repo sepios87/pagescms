@@ -1,6 +1,5 @@
 import { z, ZodIssueCode } from "zod";
 import { ViewComponent } from "./view-component";
-import { EditComponent } from "./edit-component";
 import { Field } from "@/types/field";
 import { swapPrefix } from "@/lib/github-image";
 import { getSchemaByName } from "@/lib/schema";
@@ -170,4 +169,4 @@ const defaultValue = (field: Field) => {
 
 const label = "Image";
 
-export { label, schema, ViewComponent, EditComponent, read, write, defaultValue, getAllowedExtensions };
+export { label, schema, ViewComponent, read, write, defaultValue, getAllowedExtensions };
