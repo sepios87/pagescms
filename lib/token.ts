@@ -93,7 +93,7 @@ const getToken = cache(async (
     };
   }
 
-  if (githubAccount?.accessToken && verifyGithubAccess) {
+  if (userAccessToken && verifyGithubAccess) {
     throw createHttpError(
       `You do not have permission to access "${owner}/${repo}".`,
       403,
