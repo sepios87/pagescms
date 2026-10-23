@@ -767,7 +767,8 @@ export function Collection({ name, path }: { name: string; path?: string }) {
               if (path === primaryField) {
                 return (
                   <Link
-                    className="font-medium truncate"
+                    // The link stretches over the whole row or card (its parent is relative)
+                    className="font-medium truncate after:absolute after:inset-0"
                     href={`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeURIComponent(row.original.path)}`}
                   >
                     {CellView}

@@ -119,9 +119,9 @@ const ReorderRow = ({
     <TableRow
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(isDragging && "relative z-10 bg-muted shadow-sm")}
+      className={cn("relative cursor-pointer", isDragging && "z-10 bg-muted shadow-sm")}
     >
-      <TableCell className="p-2 border-b py-0 h-12 w-8">
+      <TableCell className="relative z-10 p-2 border-b py-0 h-12 w-8">
         <button
           type="button"
           ref={setActivatorNodeRef}
@@ -171,7 +171,8 @@ const RowShell = ({
   children: ReactNode;
 }) => {
   const content = <>{leading}{children}</>;
-  if (!reorder) return <TableRow>{content}</TableRow>;
+  // The link of the title stretches over a file's row, which makes it clickable
+  if (!reorder) return <TableRow className={isFile ? "relative cursor-pointer" : undefined}>{content}</TableRow>;
   if (isFile) {
     return (
       <ReorderRow id={id} enabled={enabled} hint={hint} onSortByPosition={onSortByPosition}>
@@ -294,7 +295,7 @@ export function CollectionTable<TData extends TableData>({
   };
 
   const selectCell = (row: Row<Record<string, any>>) => (
-    <TableCell className="p-2 border-b py-0 h-12 w-8">
+    <TableCell className="relative z-10 p-2 border-b py-0 h-12 w-8">
       {row.original.type === "file" && (
         <Checkbox
           checked={row.getIsSelected()}
@@ -385,17 +386,6 @@ export function CollectionTable<TData extends TableData>({
 
   return (
     <div className="space-y-2">
-      {bulk && selectedPaths.length > 0 && (
-        <CollectionBulkBar
-          count={selectedPaths.length}
-          canDelete={bulk.canDelete}
-          canDuplicate={bulk.canDuplicate}
-          busy={bulk.busy}
-          onDelete={() => runBulk("delete")}
-          onDuplicate={() => runBulk("duplicate")}
-          onClear={() => table.resetRowSelection()}
-        />
-      )}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -545,6 +535,9 @@ export function CollectionTable<TData extends TableData>({
                         key={cell.id}
                         className={cn(
                           "p-2 border-b py-0 h-12",
+                          // Buttons and menus stay above the stretched link of the row, the
+                          // empty space around them lets the click through
+                          cell.column.id === "actions" && "relative z-10 pointer-events-none [&_a]:pointer-events-auto [&_button]:pointer-events-auto",
                           cell.column.columnDef.meta?.className,
                         )}
                         style={{
@@ -558,13 +551,13 @@ export function CollectionTable<TData extends TableData>({
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           {isTree && row.getCanExpand() && cell.column.id === primaryField && (
                             loadingRows[row.id]
-                              ? <Button variant="ghost" size="icon-sm" className="h-6 w-6 rounded-full" disabled>
+                              ? <Button variant="ghost" size="icon-sm" className="relative z-10 h-6 w-6 rounded-full" disabled>
                                   <Loader className="h-4 w-4 animate-spin text-muted-foreground" />
                                 </Button>
                               : <Button
                                   variant="ghost"
                                   size="icon-sm"
-                                  className="h-6 w-6 rounded-full"
+                                  className="relative z-10 h-6 w-6 rounded-full"
                                   onClick={() => handleRowExpansion(row as Row<TData>)}
                                   disabled={row.getIsExpanded() && Array.isArray(row.original.subRows) && row.original.subRows.length === 0}
                                 >
@@ -638,6 +631,18 @@ export function CollectionTable<TData extends TableData>({
             </PaginationContent>
           </Pagination>
         </footer>
+      )}
+      {/* After the list, and sticky: it appears without moving what is above it */}
+      {bulk && selectedPaths.length > 0 && (
+        <CollectionBulkBar
+          count={selectedPaths.length}
+          canDelete={bulk.canDelete}
+          canDuplicate={bulk.canDuplicate}
+          busy={bulk.busy}
+          onDelete={() => runBulk("delete")}
+          onDuplicate={() => runBulk("duplicate")}
+          onClear={() => table.resetRowSelection()}
+        />
       )}
     </div>
   )

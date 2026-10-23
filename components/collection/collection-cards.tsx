@@ -97,9 +97,9 @@ const CardContent = ({
     <>
       <div className="relative">
         <Thumbnail name={thumbnail.media} path={imagePath} className="aspect-[4/3]" />
-        {handle && <div className="absolute left-2 top-2">{handle}</div>}
+        {handle && <div className="absolute left-2 top-2 z-10">{handle}</div>}
         {selectable && (
-          <div className="absolute right-2 top-2 rounded-md bg-background/90 p-1 shadow-sm">
+          <div className="absolute right-2 top-2 z-10 rounded-md bg-background/90 p-1 shadow-sm">
             <Checkbox
               checked={row.getIsSelected()}
               onCheckedChange={(value) => row.toggleSelected(!!value)}
@@ -122,7 +122,7 @@ const CardContent = ({
         ))}
       </div>
       {actionsCell && (
-        <div className="flex justify-end border-t p-2">
+        <div className="relative z-10 pointer-events-none [&_a]:pointer-events-auto [&_button]:pointer-events-auto flex justify-end border-t p-2">
           {flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}
         </div>
       )}
