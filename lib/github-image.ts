@@ -12,6 +12,7 @@ import {
   normalizePath,
 } from "@/lib/utils/file";
 import { requireApiSuccess } from "@/lib/api-client";
+import { encodeSegment } from "@/lib/utils/url";
 
 const ttl = 30000; // TTL for the cache (30 seconds)
 const cache: { [key: string]: any } = {};
@@ -86,7 +87,7 @@ const getRawUrl = async (
       
       if (!requests[parentFullPath]) {
         requests[parentFullPath] = fetch(
-          `/api/${owner}/${repo}/${encodeBranch(branch)}/media/${encodeURIComponent(name)}/${encodeURIComponent(parentPath)}?nocache=true`
+          `/api/${owner}/${repo}/${encodeBranch(branch)}/media/${encodeURIComponent(name)}/${encodeSegment(parentPath)}?nocache=true`
         )
           .then((response) => requireApiSuccess<any>(response, "Failed to fetch media"))
           .catch(err => {

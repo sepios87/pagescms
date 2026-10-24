@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { requireApiSuccess } from "@/lib/api-client";
 import type { FileSaveData } from "@/types/api";
 import { formatFileSize, resizeImage } from "@/lib/utils/image-resize";
+import { encodeSegment } from "@/lib/utils/url";
 
 interface MediaUploadContextValue {
   handleFiles: (files: File[]) => Promise<void>;
@@ -93,7 +94,7 @@ function MediaUploadRoot({ children, path, onUpload, media, extensions, multiple
           });
 
           const fullPath = joinPathSegments([path ?? "", uploadFilename]);
-          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(fullPath)}`, {
+          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(fullPath)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

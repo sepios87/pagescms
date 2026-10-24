@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { ArrowUpRight } from "lucide-react";
 import { FileRename } from "@/components/file/file-rename";
+import { encodeSegment } from "@/lib/utils/url";
 
 export function FileOptions({
   path,
@@ -86,7 +87,7 @@ export function FileOptions({
 
     const duplicatePromise = (async () => {
       const entryResponse = await fetch(
-        `${apiUrl}/entries/${encodeURIComponent(normalizedPath)}?name=${encodeURIComponent(name!)}`,
+        `${apiUrl}/entries/${encodeSegment(normalizedPath)}?name=${encodeURIComponent(name!)}`,
       );
       const entry = await requireApiSuccess<any>(entryResponse, "Failed to read the entry");
 
@@ -97,7 +98,7 @@ export function FileOptions({
         : `${fileName}-copy`;
       const copyPath = joinPathSegments([getParentPath(normalizedPath), copyName]);
 
-      const response = await fetch(`${apiUrl}/files/${encodeURIComponent(copyPath)}`, {
+      const response = await fetch(`${apiUrl}/files/${encodeSegment(copyPath)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -129,7 +130,7 @@ export function FileOptions({
           });
           if (name) params.set("name", name);
 
-          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(normalizedPath)}?${params.toString()}`, {
+          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(normalizedPath)}?${params.toString()}`, {
             method: "DELETE",
           });
 

@@ -80,6 +80,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EllipsisVertical, FolderPlus, LayoutGrid, LayoutList, Plus, Search } from "lucide-react";
+import { encodeSegment } from "@/lib/utils/url";
 import {
   Tooltip,
   TooltipContent,
@@ -693,7 +694,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
         const renamePromise = new Promise(async (resolve, reject) => {
           try {
             const response = await fetch(
-              `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(normalizedPath)}/rename`,
+              `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(normalizedPath)}/rename`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -769,7 +770,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
                   <Link
                     // The link stretches over the whole row or card (its parent is relative)
                     className="font-medium truncate after:absolute after:inset-0"
-                    href={`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeURIComponent(row.original.path)}`}
+                    href={`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeSegment(row.original.path)}`}
                   >
                     {CellView}
                   </Link>
@@ -795,7 +796,7 @@ export function Collection({ name, path }: { name: string; path?: string }) {
                 className={cn(
                   buttonVariants({ variant: "outline", size: "sm" }),
                 )}
-                href={`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${name}/edit/${encodeURIComponent(row.original.path)}`}
+                href={`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${name}/edit/${encodeSegment(row.original.path)}`}
               >
                 Edit
               </Link>

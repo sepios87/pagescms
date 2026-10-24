@@ -42,6 +42,7 @@ import {
 import type { ApiResponse, FileSaveData } from "@/types/api";
 import type { Field } from "@/types/field";
 import { resizeImage, type ResizeOptions } from "@/lib/utils/image-resize";
+import { encodeSegment } from "@/lib/utils/url";
 import "./edit-component.css";
 
 type MediaSchema = {
@@ -794,7 +795,7 @@ const EditComponent = forwardRef(
         ]);
 
         const response = await fetch(
-          `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(targetPath)}`,
+          `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(targetPath)}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

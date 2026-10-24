@@ -67,6 +67,7 @@ import { toast } from "sonner";
 import { EllipsisVertical, History, Lock, LockOpen, Save } from "lucide-react";
 import useSWR, { useSWRConfig } from "swr";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes";
+import { encodeSegment } from "@/lib/utils/url";
 
 type LintView = {
   state: {
@@ -208,7 +209,7 @@ export function Entry({
 
   const entryApiUrl = useMemo(() => (
     path
-      ? `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/entries/${encodeURIComponent(path)}?name=${encodeURIComponent(name)}`
+      ? `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/entries/${encodeSegment(path)}?name=${encodeURIComponent(name)}`
       : null
   ), [config.branch, config.owner, config.repo, name, path]);
 
@@ -275,7 +276,7 @@ export function Entry({
 
   const historyApiUrl = useMemo(() => (
     path
-      ? `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/entries/${encodeURIComponent(path)}/history?name=${encodeURIComponent(name)}`
+      ? `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/entries/${encodeSegment(path)}/history?name=${encodeURIComponent(name)}`
       : null
   ), [config.branch, config.owner, config.repo, name, path]);
 
@@ -345,7 +346,7 @@ export function Entry({
         ) {
           const newPath = joinPathSegments([getParentPath(savePath), normalizedFilename]);
           const renameResponse = await fetch(
-            `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(savePath)}/rename`,
+            `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(savePath)}/rename`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -360,13 +361,13 @@ export function Entry({
           savePath = newPath;
           setPath(newPath);
           setIsFilenameUnlocked(false);
-          router.replace(`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeURIComponent(newPath)}`);
+          router.replace(`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeSegment(newPath)}`);
 
           const collectionKeyPrefix = `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collections/${encodeURIComponent(name)}?`;
           void mutate((key) => typeof key === "string" && key.startsWith(collectionKeyPrefix));
         }
 
-        const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(savePath)}`, {
+        const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(savePath)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -388,7 +389,7 @@ export function Entry({
           setHasRegisteredChanges(false);
         }
 
-        if (!path && schemaType === "collection") router.push(`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeURIComponent(data.data.path)}`);
+        if (!path && schemaType === "collection") router.push(`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeSegment(data.data.path)}`);
         if (schemaType === "collection") {
           const collectionKeyPrefix = `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collections/${encodeURIComponent(name)}?`;
           void mutate((key) => typeof key === "string" && key.startsWith(collectionKeyPrefix));
@@ -479,7 +480,7 @@ export function Entry({
       void mutate(entryApiUrl, undefined, { revalidate: false });
     }
     setPath(newPath);
-    router.replace(`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeURIComponent(newPath)}`);
+    router.replace(`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeSegment(newPath)}`);
   }, [config.branch, config.owner, config.repo, entryApiUrl, mutate, name, router, schemaType]);
 
   const breadcrumbNode = useMemo(() => {

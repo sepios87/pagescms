@@ -12,10 +12,12 @@ function isAllowedOrigin(originHeader: string, hostHeader: string): boolean {
 
 export function proxy(request: NextRequest) {
 	const pathname = request.nextUrl.pathname;
+	// A path ending with a file name (".../edit/src%252Fcontent%252Fx.md") is a
+	// route, not a static asset: it carries a double-encoded slash.
 	const isStaticAsset =
 		pathname.startsWith("/_next/") ||
 		pathname === "/favicon.ico" ||
-		/\.[^/]+$/.test(pathname);
+		(/\.[^/]+$/.test(pathname) && !/%252F/i.test(pathname));
 
 	if (isStaticAsset) {
 		return NextResponse.next();

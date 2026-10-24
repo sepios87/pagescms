@@ -10,6 +10,7 @@ import { getSchemaByName, initializeState } from "@/lib/schema";
 import { requireApiSuccess } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { encodeSegment } from "@/lib/utils/url";
 
 const EmptyCreate = ({
   children,
@@ -73,7 +74,7 @@ const EmptyCreate = ({
     const toastId = toast.loading(`Creating ${toCreate}...`);
 
     try {
-      const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(normalizePath(path))}`, {
+      const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(normalizePath(path))}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -44,6 +44,7 @@ import { requireApiSuccess } from "@/lib/api-client";
 import { getSchemaActions } from "@/lib/actions";
 import type { FileSaveData, MediaItem } from "@/types/api";
 import useSWR, { useSWRConfig } from "swr";
+import { encodeSegment } from "@/lib/utils/url";
 import {
   CornerLeftUp,
   House,
@@ -287,7 +288,7 @@ const MediaView = ({
   }, []);
   
   const buildMediaApiUrl = useCallback((targetPath: string): string => (
-    `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/media/${encodeURIComponent(mediaConfig.name)}/${encodeURIComponent(targetPath)}`
+    `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/media/${encodeURIComponent(mediaConfig.name)}/${encodeSegment(targetPath)}`
   ), [config.branch, config.owner, config.repo, mediaConfig.name]);
 
   const mediaKey = useMemo(() => buildMediaApiUrl(path), [buildMediaApiUrl, path]);

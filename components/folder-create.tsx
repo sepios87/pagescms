@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { encodeSegment } from "@/lib/utils/url";
 
 type FolderCreateResult = {
   path: string;
@@ -61,7 +62,7 @@ const FolderCreate = ({
         status: string;
         message?: string;
         data: FolderCreateResult;
-      }> = fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeURIComponent(fullNewPath + "/.gitkeep")}`, {
+      }> = fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(fullNewPath + "/.gitkeep")}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
