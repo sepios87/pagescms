@@ -34,6 +34,7 @@ import {
   decodePathSafely,
   extensionCategories,
   getFileExtension,
+  getParentPath,
   getUploadFileName,
   joinPathSegments,
   normalizeMediaPath,
@@ -43,6 +44,7 @@ import type { ApiResponse, FileSaveData } from "@/types/api";
 import type { Field } from "@/types/field";
 import { resizeImage, type ResizeOptions } from "@/lib/utils/image-resize";
 import { encodeSegment } from "@/lib/utils/url";
+import { readMediaContent, useStagedMedia } from "@/contexts/staged-media-context";
 import "./edit-component.css";
 
 type MediaSchema = {
@@ -333,6 +335,12 @@ const EditComponent = forwardRef(
     } = props;
     void ref;
     const form = useFormContext();
+    const staged = useStagedMedia();
+    const stage = staged?.stage;
+    const lookupStaged = staged?.get;
+    const fetchPreview = staged?.fetchPreview;
+    const preparing = staged?.preparing;
+    const previewUrl = useCallback((path: string) => lookupStaged?.(normalizeMediaPath(path))?.preview, [lookupStaged]);
 
     const options = field?.options ?? {};
     const isReadonly = Boolean(field?.readonly);
@@ -347,6 +355,11 @@ const EditComponent = forwardRef(
     const [isTransforming, setIsTransforming] = useState(false);
     const [hasHydratedEditor, setHasHydratedEditor] = useState(false);
     const [pendingUploads, setPendingUploads] = useState(0);
+    const pendingUploadsRef = useRef(0);
+    const onPendingUploadsChange = useCallback((count: number) => {
+      pendingUploadsRef.current = count;
+      setPendingUploads(count);
+    }, []);
     const editorDirtyRef = useRef(false);
     const editorValueRef = useRef(canonicalValue);
     const syncedEditorValueRef = useRef(canonicalValue);
@@ -425,6 +438,8 @@ const EditComponent = forwardRef(
       async (url: string) => {
         if (!config || !mediaConfig) return url;
         if (!url || isExternalUrl(url) || isDataUrl(url)) return url;
+        const preview = previewUrl(url);
+        if (preview) return preview;
         const decodedUrl = normalizeMediaPath(decodePathSafely(url));
         const canonicalOutputPath = swapPrefix(
           decodedUrl,
@@ -463,7 +478,7 @@ const EditComponent = forwardRef(
           return canonicalOutputPath;
         }
       },
-      [config, isPrivate, mediaConfig],
+      [config, isPrivate, mediaConfig, previewUrl],
     );
 
     const toCanonicalImageUrl = useCallback(
@@ -512,6 +527,8 @@ const EditComponent = forwardRef(
             mediaConfig.name,
             withInputPrefix,
             isPrivate,
+            false,
+            previewUrl,
           );
         }
 
@@ -531,22 +548,31 @@ const EditComponent = forwardRef(
           mediaConfig.name,
           withInputPrefixEverywhere,
           isPrivate,
+          false,
+          previewUrl,
         );
         return rewriteMarkdownImagesAsync(htmlNormalized, toDisplayImageUrl);
       },
-      [config, format, isPrivate, mediaConfig, toDisplayImageUrl],
+      [config, format, isPrivate, mediaConfig, previewUrl, toDisplayImageUrl],
     );
 
     const editorToSource = useCallback(
       async (editorContent: string) => {
         if (!mediaConfig || !config || !editorContent) return editorContent;
+        const content = editorContent.replace(/blob:[^\s"'<>()[\]]+/g, (url) => {
+          const file = fetchPreview?.(url);
+          return file ? joinPathSegments([getParentPath(file.path), file.reference]) : url;
+        });
+        if (/blob:[^\s"'<>()[\]]+/.test(content)) {
+          throw new Error("Remove the image that failed to prepare before saving.");
+        }
 
         if (format === "html") {
           const withRelativeUrls = rawToRelativeUrls(
             config.owner,
             config.repo,
             config.branch,
-            editorContent,
+            content,
           );
           return htmlSwapPrefix(
             withRelativeUrls,
@@ -556,7 +582,7 @@ const EditComponent = forwardRef(
         }
 
         const withRelativeMd = rewriteMarkdownImagesSync(
-          editorContent,
+          content,
           toCanonicalImageUrl,
         );
         const withRelativeHtml = rawToRelativeUrls(
@@ -575,7 +601,7 @@ const EditComponent = forwardRef(
           mediaConfig.output,
         );
       },
-      [config, format, mediaConfig, toCanonicalImageUrl],
+      [config, fetchPreview, format, mediaConfig, toCanonicalImageUrl],
     );
 
     useEffect(() => {
@@ -642,6 +668,9 @@ const EditComponent = forwardRef(
       const key = `rich-text:${name}`;
       return registerBeforeSubmitHook(key, async () => {
         if (modeRef.current !== "editor") return;
+        if (pendingUploadsRef.current || imageSubmitInFlightRef.current) {
+          throw new Error("Wait for the images to finish preparing.");
+        }
         await syncEditorToSource();
       });
     }, [name, registerBeforeSubmitHook, syncEditorToSource]);
@@ -776,15 +805,6 @@ const EditComponent = forwardRef(
           );
         }
 
-        const prepared = await resizeImage(file, mediaConfig.resize);
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result ?? ""));
-          reader.onerror = () =>
-            reject(new Error("Failed to read image file."));
-          reader.readAsDataURL(prepared);
-        });
-        const content = dataUrl.replace(/^(.+,)/, "");
         const uploadFilename = getUploadFileName(
           file.name,
           options.rename ?? mediaConfig.rename,
@@ -793,6 +813,18 @@ const EditComponent = forwardRef(
           rootPath ?? mediaConfig.input,
           uploadFilename,
         ]);
+        if (stage) {
+          if (preparing) preparing.current++;
+          try {
+            const prepared = await resizeImage(file, mediaConfig.resize);
+            const path = await stage(mediaConfig.name, targetPath, prepared);
+            return { src: previewUrl(path) ?? path, alt: file.name };
+          } finally {
+            if (preparing) preparing.current--;
+          }
+        }
+        const prepared = await resizeImage(file, mediaConfig.resize);
+        const content = await readMediaContent(prepared);
 
         const response = await fetch(
           `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(targetPath)}`,
@@ -829,7 +861,10 @@ const EditComponent = forwardRef(
         config,
         mediaConfig,
         options.rename,
+        preparing,
+        previewUrl,
         rootPath,
+        stage,
         toDisplayImageUrl,
       ],
     );
@@ -914,7 +949,7 @@ const EditComponent = forwardRef(
               enableImagePasteDrop={Boolean(mediaConfig)}
               onUploadImage={mediaConfig ? handleUploadImage : undefined}
               onRequestImage={mediaConfig ? handleRequestImage : undefined}
-              onPendingUploadsChange={setPendingUploads}
+              onPendingUploadsChange={onPendingUploadsChange}
               disabled={isReadonly}
             />
           )

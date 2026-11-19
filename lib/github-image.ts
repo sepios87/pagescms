@@ -192,7 +192,8 @@ const relativeToRawUrls = async (
   name: string,
   html: string,
   isPrivate = false,
-  decode = false
+  decode = false,
+  previewUrl?: (path: string) => string | undefined,
 ) => {
   const matches = getImgSrcs(html);
   if (matches.length === 0) return html;
@@ -207,7 +208,7 @@ const relativeToRawUrls = async (
 
   const replacementEntries = await Promise.all(
     uniqueSources.map(async (src) => {
-      const rawUrl = await getRawUrl(owner, repo, branch, name, src, isPrivate, true);
+      const rawUrl = previewUrl?.(src) ?? await getRawUrl(owner, repo, branch, name, src, isPrivate, true);
       return [src, rawUrl] as const;
     }),
   );

@@ -1,5 +1,7 @@
 "use client";
 
+import { useStagedMedia } from "@/contexts/staged-media-context";
+
 import { encodeBranch } from "@/lib/utils/branch";
 import { Fragment, memo, type ReactNode, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -141,6 +143,7 @@ const MediaFileTile = memo(function MediaFileTile({
   onDelete,
   onRename,
 }: MediaFileTileProps) {
+  const pending = useStagedMedia()?.get(item.path);
   const content = (
     <div className={cn(
       "relative rounded-md",
@@ -157,7 +160,7 @@ const MediaFileTile = memo(function MediaFileTile({
           <div className="text-sm font-medium truncate">{item.name}</div>
           <div className="text-xs text-muted-foreground truncate">{displaySize}</div>
         </div>
-        <FileOptions
+        {!pending && <FileOptions
           path={item.path}
           sha={item.sha || ""}
           type="media"
@@ -169,7 +172,7 @@ const MediaFileTile = memo(function MediaFileTile({
           <Button variant="ghost" size="icon-xs" className="shrink-0 self-start">
             <EllipsisVertical />
           </Button>
-        </FileOptions>
+        </FileOptions>}
       </div>
       {selectable && isSelected && (
         <div className="text-primary-foreground bg-primary p-0.5 rounded-full absolute top-2 left-2">
@@ -213,6 +216,7 @@ const MediaView = ({
   extensions?: string[],
   usePageHeader?: boolean,
 }) => {
+  const staged = useStagedMedia();
   const { config } = useConfig();
   if (!config) throw new Error(`Configuration not found.`);
   const { mutate } = useSWRConfig();
@@ -353,9 +357,11 @@ const MediaView = ({
 
         return sortMediaItems([...prevData, mediaEntry]);
     });
-    void mutate((key) => typeof key === "string" && key.includes(`/media/${encodeURIComponent(mediaConfig.name)}/`));
+    if (!staged?.get(entry.path)) {
+      void mutate((key) => typeof key === "string" && key.includes(`/media/${encodeURIComponent(mediaConfig.name)}/`));
+    }
     onUpload?.(entry);
-  }, [mediaConfig.name, mutate, onUpload, sortMediaItems]);
+  }, [mediaConfig.name, mutate, onUpload, sortMediaItems, staged]);
 
   const handleDelete = useCallback((deletedPath: string) => {
     setData((prevData) => {

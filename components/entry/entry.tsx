@@ -68,6 +68,7 @@ import { EllipsisVertical, History, Lock, LockOpen, Save } from "lucide-react";
 import useSWR, { useSWRConfig } from "swr";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes";
 import { encodeSegment } from "@/lib/utils/url";
+import type { StagedMedia } from "@/lib/staged-media";
 
 type LintView = {
   state: {
@@ -109,6 +110,7 @@ export function Entry({
   });
   const [isLoading, setIsLoading] = useState(path ? true : false);
   const [isSaving, setIsSaving] = useState(false);
+  const [mediaSaveVersion, setMediaSaveVersion] = useState(0);
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [hasRegisteredChanges, setHasRegisteredChanges] = useState(false);
   const [error, setError] = useState<string | undefined | null>(null);
@@ -312,13 +314,14 @@ export function Entry({
     && filenameValue.trim().length > 0
     && filenameValue.trim() !== currentFilename;
 
-  const onSubmit = async (contentObject: Record<string, unknown>) => {
+  const onSubmit = async (contentObject: Record<string, unknown>, stagedMedia: StagedMedia[]) => {
     setIsSaving(true);
     const submitStartChangeVersion = changeVersionRef.current;
 
     const savePromise = new Promise<ApiSuccess<EntryData>>(async (resolve, reject) => {
       try {
         let savePath = path;
+        let renameFrom: string | undefined;
         const trimmedFilename = filenameValue.trim();
         const normalizedFilename = normalizePath(trimmedFilename).split("/").pop() || "";
 
@@ -345,6 +348,10 @@ export function Entry({
           && schemaType === "collection"
         ) {
           const newPath = joinPathSegments([getParentPath(savePath), normalizedFilename]);
+          if (stagedMedia.length) {
+            renameFrom = savePath;
+            savePath = newPath;
+          } else {
           const renameResponse = await fetch(
             `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(savePath)}/rename`,
             {
@@ -365,6 +372,7 @@ export function Entry({
 
           const collectionKeyPrefix = `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collections/${encodeURIComponent(name)}?`;
           void mutate((key) => typeof key === "string" && key.startsWith(collectionKeyPrefix));
+          }
         }
 
         const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(savePath)}`, {
@@ -376,7 +384,8 @@ export function Entry({
             content: schema?.list === true
               ? contentObject.listWrapper
               : contentObject,
-            sha: sha
+            sha: sha,
+            ...(stagedMedia.length ? { stagedMedia, renameFrom } : {}),
           }),
         });
         const data = await requireApiSuccess<any>(
@@ -385,6 +394,19 @@ export function Entry({
         );
         
         if (data.data.sha !== sha) setSha(data.data.sha);
+        if (stagedMedia.length) {
+          setEntry(data.data);
+          setMediaSaveVersion((value) => value + 1);
+          if (renameFrom) {
+            setPath(data.data.path);
+            setIsFilenameUnlocked(false);
+            router.replace(`/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeSegment(data.data.path)}`);
+          } else if (path) {
+            void mutateEntry(data.data, { revalidate: false });
+          }
+          const mediaKeyPrefix = `/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/media/`;
+          void mutate((key) => typeof key === "string" && key.startsWith(mediaKeyPrefix));
+        }
         if (submitStartChangeVersion === changeVersionRef.current) {
           setHasRegisteredChanges(false);
         }
@@ -415,12 +437,14 @@ export function Entry({
       if (submitStartChangeVersion === changeVersionRef.current) {
         setHasRegisteredChanges(false);
       }
+      return true;
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error(error.message);
       } else {
         console.error(error);
       }
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -852,6 +876,7 @@ export function Entry({
     isLoading
       ? loadingSkeleton
       : <EntryForm
+        key={mediaSaveVersion}
         fields={entryFields}
         contentObject={entryContentObject}
         onSubmit={onSubmit}

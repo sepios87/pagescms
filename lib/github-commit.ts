@@ -4,6 +4,7 @@ import { getBranchHeadSha, setBranchHeadSha } from "@/lib/github-cache-file";
 import { createHttpError } from "@/lib/api-error";
 
 type Octokit = ReturnType<typeof createOctokitInstance>;
+type Addition = { path: string; content: string | Buffer };
 
 type CommitChangesOptions = {
   token: string;
@@ -12,7 +13,8 @@ type CommitChangesOptions = {
   branch: string;
   message: string;
   // Files to create or overwrite
-  additions?: { path: string; content: string }[];
+  additions?: Addition[];
+  expectedHeadSha?: string;
   // Paths of the files to delete
   deletions?: string[];
   // Set to commit as a given person (this uses the Git data API)
@@ -20,7 +22,7 @@ type CommitChangesOptions = {
 };
 
 // SHA that Git gives to a file with this content
-const gitBlobSha = (content: string) =>
+const gitBlobSha = (content: string | Buffer) =>
   createHash("sha1")
     .update(`blob ${Buffer.byteLength(content)}\0`)
     .update(content)
@@ -33,7 +35,7 @@ type GitCommitOptions = {
   branch: string;
   headSha: string;
   message: string;
-  additions: { path: string; content: string }[];
+  additions: Addition[];
   deletions: string[];
 };
 
@@ -69,17 +71,24 @@ const commitWithRest = async ({
   octokit, owner, repo, branch, headSha, message, additions, deletions, committer,
 }: GitCommitOptions & { committer: { name: string; email: string } }) => {
   const { data: headCommit } = await octokit.rest.git.getCommit({ owner, repo, commit_sha: headSha });
+  const treeEntries = [];
+  for (const { path, content } of additions) {
+    const entry = { path, mode: "100644" as const, type: "blob" as const };
+    if (typeof content === "string") {
+      treeEntries.push({ ...entry, content });
+    } else {
+      const { data: blob } = await octokit.rest.git.createBlob({
+        owner, repo, content: content.toString("base64"), encoding: "base64",
+      });
+      treeEntries.push({ ...entry, sha: blob.sha });
+    }
+  }
   const { data: tree } = await octokit.rest.git.createTree({
     owner,
     repo,
     base_tree: headCommit.tree.sha,
     tree: [
-      ...additions.map((file) => ({
-        path: file.path,
-        mode: "100644" as const,
-        type: "blob" as const,
-        content: file.content,
-      })),
+      ...treeEntries,
       ...deletions.map((path) => ({
         path,
         mode: "100644" as const,
@@ -103,10 +112,10 @@ const commitWithRest = async ({
 // Creates, updates and deletes several files in one commit on a branch and
 // returns the SHA of the commit.
 const commitChanges = async ({
-  token, owner, repo, branch, message, additions = [], deletions = [], committer,
+  token, owner, repo, branch, message, additions = [], deletions = [], committer, expectedHeadSha,
 }: CommitChangesOptions): Promise<string> => {
   const octokit = createOctokitInstance(token);
-  const headSha = await getBranchHeadSha(owner, repo, branch, token);
+  const headSha = expectedHeadSha ?? await getBranchHeadSha(owner, repo, branch, token);
   const options = { octokit, owner, repo, branch, headSha, message, additions, deletions };
 
   let commitSha: string;

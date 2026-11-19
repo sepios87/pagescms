@@ -20,6 +20,7 @@ import { getAllowedExtensions } from "./index";
 import type { Config } from "@/types/config";
 import type { Field } from "@/types/field";
 import type { FileSaveData } from "@/types/api";
+import { useStagedMedia } from "@/contexts/staged-media-context";
 
 const generateId = () => crypto.randomUUID().replace(/-/g, "").slice(0, 8);
 
@@ -53,10 +54,11 @@ const ImageTeaser = ({ file, config, onRemove }: {
   config: Pick<Config, "owner" | "repo" | "branch">;
   onRemove?: () => void;
 }) => {
+  const pending = useStagedMedia()?.get(file);
   return (
     <div className="absolute bottom-1 right-1 rounded-md bg-background/95 backdrop-blur-sm">
       <ButtonGroup>
-        <Tooltip>
+        {!pending && <Tooltip>
           <TooltipTrigger asChild>
             <Button type="button" variant="ghost" size="icon-xs" asChild className="text-muted-foreground hover:text-foreground">
               <a
@@ -70,7 +72,7 @@ const ImageTeaser = ({ file, config, onRemove }: {
             </Button>
           </TooltipTrigger>
           <TooltipContent>View on GitHub</TooltipContent>
-        </Tooltip>
+        </Tooltip>}
         {onRemove && (
           <Tooltip>
             <TooltipTrigger asChild>

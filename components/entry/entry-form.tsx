@@ -23,10 +23,17 @@ import {
   getDefaultValue,
   generateZodSchema,
   sanitizeObject,
+  getSchemaByName,
 } from "@/lib/schema";
 import { Field } from "@/types/field";
 import { Button } from "@/components/ui/button";
 import { useEntryDraft } from "@/hooks/use-entry-draft";
+import { StagedMediaContext, useStagedMediaStore } from "@/contexts/staged-media-context";
+import type { StagedMedia } from "@/lib/staged-media";
+import { useConfig } from "@/contexts/config-context";
+import { EntryGallery } from "@/components/entry/entry-gallery";
+import { getAllowedExtensions } from "@/fields/core/image";
+import { normalizePath } from "@/lib/utils/file";
 import { cn } from "@/lib/utils";
 import {
   Form,
@@ -66,6 +73,7 @@ import {
 } from "@dnd-kit/core";
 import {
   arrayMove,
+  rectSortingStrategy,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
@@ -344,6 +352,60 @@ const ListField = ({
     field.required ||
     (isCollapsible && arrayFields.length > 0);
   const isReadonly = Boolean(field.readonly);
+  const { config } = useConfig();
+  const form = useFormContext();
+  const rows = useRef(arrayFields);
+  rows.current = arrayFields;
+  const galleryFields = field.type === "object" ? field.fields ?? [] : [];
+  const imageFields = galleryFields.filter((child) => child.type === "image");
+  const imageField = imageFields.length === 1 ? imageFields[0] : undefined;
+  const galleryField = imageField && !imageField.hidden && !imageField.readonly &&
+    !imageField.list && !imageField.options?.multiple &&
+    galleryFields.every((child) => child === imageField ||
+      (!child.list && ["alt", "caption"].includes(child.name) && ["string", "text"].includes(child.type)))
+    ? imageField : undefined;
+  const mediaName = galleryField?.options?.media;
+  const galleryMedia = config && galleryField && mediaName !== false
+    ? typeof mediaName === "string"
+      ? getSchemaByName(config.object, mediaName, "media")
+      : config.object.media?.[0]
+    : undefined;
+  const mediaRoot = normalizePath(galleryMedia?.input ?? "");
+  const configuredPath = typeof galleryField?.options?.path === "string"
+    ? normalizePath(galleryField.options.path)
+    : mediaRoot;
+  const galleryPath = !mediaRoot || configuredPath.startsWith(`${mediaRoot}/`) ? configuredPath : mediaRoot;
+  const isGallery = !!(galleryField && galleryMedia);
+  const maxPhotos = typeof field.list === "object" ? field.list.max ?? Infinity : Infinity;
+
+  const removePhotos = async (ids: string[]) => {
+    await runBeforeSubmitHooks?.();
+    const indexes = rows.current.flatMap((row, index) => ids.includes(row.id) ? [index] : []);
+    remove(indexes);
+  };
+
+  const addPhotos = async (paths: string[]) => {
+    if (!galleryField || paths.length === 0) return;
+    await runBeforeSubmitHooks?.();
+    if (form.getValues(fieldName).length + paths.length > maxPhotos) {
+      throw new Error(`This gallery can hold up to ${maxPhotos} photos.`);
+    }
+    append(paths.map((image) => initializeState(field.fields, { [galleryField.name]: image })), { shouldFocus: false });
+  };
+
+  const replacePhotos = async (ids: string[], paths: string[]) => {
+    if (!galleryField || ids.length !== paths.length) return false;
+    await runBeforeSubmitHooks?.();
+    const indexes = ids.map((id) => rows.current.findIndex((row) => row.id === id));
+    if (indexes.some((index) => index < 0)) {
+      toast.error("The gallery selection changed. Select the photos again.");
+      return false;
+    }
+    indexes.forEach((index, fileIndex) => {
+      form.setValue(`${fieldName}.${index}.${galleryField.name}`, paths[fileIndex], { shouldDirty: true });
+    });
+    return true;
+  };
 
   useEffect(() => {
     setOpenStates((prev) => {
@@ -424,8 +486,8 @@ const ListField = ({
   );
 
   const modifiers = useMemo(
-    () => [restrictToVerticalAxis, restrictToParentElement],
-    [],
+    () => isGallery ? [restrictToParentElement] : [restrictToVerticalAxis, restrictToParentElement],
+    [isGallery],
   );
   const sortableItems = useMemo(
     () => arrayFields.map((item) => item.id),
@@ -485,7 +547,7 @@ const ListField = ({
                   Readonly
                 </Badge>
               )}
-              {isCollapsible &&
+              {!isGallery && isCollapsible &&
                 arrayFields.length > 0 &&
                 (() => {
                   const isAllExpanded =
@@ -505,6 +567,7 @@ const ListField = ({
                 })()}
             </div>
           )}
+          {field.description && <FormDescription>{field.description}</FormDescription>}
           <div className="space-y-2">
             <DndContext
               sensors={sensors}
@@ -514,9 +577,29 @@ const ListField = ({
             >
               <SortableContext
                 items={sortableItems}
-                strategy={verticalListSortingStrategy}
+                strategy={isGallery ? rectSortingStrategy : verticalListSortingStrategy}
               >
-                {arrayFields.map((arrayField, index) => (
+                {galleryField && galleryMedia ? (
+                  <EntryGallery
+                    rows={arrayFields.map(({ id }, index) => {
+                      const name = `${fieldName}.${index}`;
+                      return { id, name, index, invalid: hasFieldPathError(form.formState.errors, name) };
+                    })}
+                    imageField={galleryField.name}
+                    captions={galleryFields.filter((child) => child !== galleryField && !child.hidden)}
+                    media={{
+                      name: galleryMedia.name,
+                      path: galleryPath,
+                      extensions: getAllowedExtensions(galleryField, galleryMedia),
+                      rename: galleryField.options?.rename as boolean | "safe" | "random" | undefined,
+                    }}
+                    readonly={isReadonly}
+                    remaining={maxPhotos - arrayFields.length}
+                    onAdd={addPhotos}
+                    onReplace={replacePhotos}
+                    onRemove={removePhotos}
+                  />
+                ) : arrayFields.map((arrayField, index) => (
                   <ListItemRow
                     key={arrayField.id}
                     id={arrayField.id}
@@ -536,21 +619,14 @@ const ListField = ({
                 ))}
               </SortableContext>
             </DndContext>
-            <div className="flex items-center gap-2 flex-wrap">
-              {isReadonly ? null : typeof field.list === "object" &&
-                field.list?.max &&
-                arrayFields.length >= field.list.max ? null : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addItem}
-                >
+            {!isGallery && !isReadonly && arrayFields.length < maxPhotos && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button type="button" variant="outline" size="sm" onClick={addItem}>
                   <Plus />
                   Add an item
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
             <FormMessage />
           </div>
         </FormItem>
@@ -945,7 +1021,7 @@ const SingleField = ({
           onToggleOpen={isCollapsible ? toggleOpen : undefined}
           index={isCollapsible ? index : undefined}
         />
-        {field.description && (
+        {showLabel && field.description && (
           <FormDescription>{field.description}</FormDescription>
         )}
       </FormItem>
@@ -1015,7 +1091,7 @@ const SingleField = ({
                 return <FieldComponent {...sharedProps} />;
               })()}
             </FormControl>
-            {field.description && (
+            {showLabel && field.description && (
               <FormDescription>{field.description}</FormDescription>
             )}
             <FormMessage />
@@ -1031,7 +1107,7 @@ SingleField.displayName = "SingleField";
 const EntryForm = ({
   fields,
   contentObject,
-  onSubmit = () => {},
+  onSubmit,
   filePath,
   onDirtyChange,
   onChangeRegistered,
@@ -1039,7 +1115,7 @@ const EntryForm = ({
 }: {
   fields: Field[];
   contentObject?: Record<string, unknown>;
-  onSubmit: (values: Record<string, unknown>) => void;
+  onSubmit: (values: Record<string, unknown>, media: StagedMedia[]) => Promise<boolean>;
   filePath?: React.ReactNode;
   onDirtyChange?: (isDirty: boolean) => void;
   onChangeRegistered?: () => void;
@@ -1073,6 +1149,10 @@ const EntryForm = ({
     form,
     defaultValues,
   });
+  const stagedMedia = useStagedMediaStore(draftKey);
+  const submitting = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [restoreVersion, setRestoreVersion] = useState(0);
 
   const beforeSubmitHooksRef = useRef<Map<string, BeforeSubmitHook>>(new Map());
 
@@ -1148,11 +1228,16 @@ const EntryForm = ({
   }, []);
 
   const handleSubmit = useCallback(
-    async (values: Record<string, unknown>) => {
+    async () => {
       const latestValues = form.getValues() as Record<string, unknown>;
-      await onSubmit(latestValues);
+      if (stagedMedia.preparing.current) throw new Error("Wait for the files to finish preparing before saving.");
+      const media = stagedMedia.collect(latestValues);
+      if (await onSubmit(latestValues, media)) {
+        discardDraft();
+        stagedMedia.discard();
+      }
     },
-    [form, onSubmit],
+    [discardDraft, form, onSubmit, stagedMedia],
   );
 
   const handleError = () => {
@@ -1162,14 +1247,25 @@ const EntryForm = ({
   const handleFormSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      await runBeforeValidationHooks();
-      await form.handleSubmit(handleSubmit, handleError)(event);
+      if (submitting.current) return;
+      submitting.current = true;
+      setIsSubmitting(true);
+      try {
+        await runBeforeValidationHooks();
+        await form.handleSubmit(handleSubmit, handleError)(event);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to save this entry.");
+      } finally {
+        submitting.current = false;
+        setIsSubmitting(false);
+      }
     },
     [form, handleSubmit, runBeforeValidationHooks],
   );
 
   return (
-    <Form {...form}>
+    <StagedMediaContext.Provider value={stagedMedia}>
+      <Form {...form}>
       <form
         id="entry-form"
         onSubmit={handleFormSubmit}
@@ -1184,14 +1280,26 @@ const EntryForm = ({
               Unsaved changes from {new Date(pendingDraft.savedAt).toLocaleString()} were
               found in this browser.
             </span>
-            <Button type="button" size="sm" variant="outline" onClick={restoreDraft}>
+            <Button type="button" size="sm" variant="outline" onClick={async () => {
+              try {
+                await stagedMedia.restore(pendingDraft.values);
+              } catch {
+                toast.error("The draft's attachments could not be restored.");
+              }
+              restoreDraft();
+              setRestoreVersion((value) => value + 1);
+            }}>
               Restore
             </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={discardDraft}>
+            <Button type="button" size="sm" variant="ghost" onClick={() => {
+              stagedMedia.discard(pendingDraft.values);
+              discardDraft();
+            }}>
               Discard
             </Button>
           </div>
         )}
+        <fieldset key={restoreVersion} disabled={isSubmitting} inert={isSubmitting} className="contents">
         {filePath && (
           <div className="space-y-2 overflow-hidden">
             <FormLabel>Filename</FormLabel>
@@ -1199,8 +1307,10 @@ const EntryForm = ({
           </div>
         )}
         {renderFields(fields, undefined, registerBeforeSubmitHook, runBeforeValidationHooks)}
+        </fieldset>
       </form>
-    </Form>
+      </Form>
+    </StagedMediaContext.Provider>
   );
 };
 

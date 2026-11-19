@@ -7,6 +7,7 @@ import { ButtonGroup } from "@/components/ui/button-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MediaUpload } from "@/components/media/media-upload";
 import { MediaDialog } from "@/components/media/media-dialog";
+import { useStagedMedia } from "@/contexts/staged-media-context";
 import { Upload, File, FileText, FileVideo, FileImage, FileAudio, FileArchive, FileCode, FileType, FileSpreadsheet, GripVertical, FolderOpen, ArrowUpRight, Trash2 } from "lucide-react";
 import { useConfig } from "@/contexts/config-context";
 import { getFileExtension, getFileName, extensionCategories, normalizeMediaPath, normalizePath } from "@/lib/utils/file";
@@ -54,15 +55,17 @@ const FileTeaser = ({ file, config, onRemove, getFileIcon }: {
   onRemove?: () => void;
   getFileIcon: (file: string) => React.ReactNode;
 }) => {
+  const pending = useStagedMedia()?.get(file);
+  const displayPath = pending?.path ?? file;
   return (
     <>
-      <div title={file} className="flex items-center gap-x-1 px-2 h-9 rounded-md bg-muted truncate text-sm">
-        {getFileIcon(file)}
-        {getFileName(file)}
+      <div title={displayPath} className="flex items-center gap-x-1 px-2 h-9 rounded-md bg-muted truncate text-sm">
+        {getFileIcon(displayPath)}
+        {getFileName(displayPath)}
       </div>
 
       <ButtonGroup>
-        <Tooltip>
+        {!pending && <Tooltip>
           <TooltipTrigger asChild>
             <Button type="button" variant="ghost" size="icon" asChild className="text-muted-foreground hover:text-foreground">
               <a
@@ -76,7 +79,7 @@ const FileTeaser = ({ file, config, onRemove, getFileIcon }: {
             </Button>
           </TooltipTrigger>
           <TooltipContent>View on GitHub</TooltipContent>
-        </Tooltip>
+        </Tooltip>}
         {onRemove && (
           <Tooltip>
             <TooltipTrigger asChild>

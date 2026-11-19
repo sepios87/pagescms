@@ -3,7 +3,8 @@
 import { encodeBranch } from "@/lib/utils/branch";
 import { useRef, cloneElement, useMemo, useCallback, createContext, useContext, useState } from "react";
 import { useConfig } from "@/contexts/config-context";
-import { getUploadFileName, joinPathSegments } from "@/lib/utils/file";
+import { getFileExtension, getUploadFileName, joinPathSegments } from "@/lib/utils/file";
+import { readMediaContent, useStagedMedia } from "@/contexts/staged-media-context";
 import { toast } from "sonner";
 import { getSchemaByName } from "@/lib/schema";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,9 @@ interface MediaUploadProps {
   children: React.ReactNode;
   path?: string;
   onUpload?: (entry: FileSaveData) => void;
+  onBatchUpload?: (entries: FileSaveData[]) => void | Promise<void>;
+  requiredCount?: number;
+  maxCount?: number;
   media?: string;
   extensions?: string[];
   multiple?: boolean;
@@ -41,8 +45,12 @@ interface MediaUploadDropZoneProps {
   className?: string;
 }
 
-function MediaUploadRoot({ children, path, onUpload, media, extensions, multiple, rename, disabled = false }: MediaUploadProps) {
+function MediaUploadRoot({ children, path, onUpload, onBatchUpload, requiredCount, maxCount, media, extensions, multiple, rename, disabled = false }: MediaUploadProps) {
   const { config } = useConfig();
+  const staged = useStagedMedia();
+  const stage = staged?.stage;
+  const preparing = staged?.preparing;
+  const handlingFiles = useRef(false);
   if (!config) throw new Error(`Configuration not found.`);
 
   const configMedia = useMemo(() => 
@@ -67,6 +75,18 @@ function MediaUploadRoot({ children, path, onUpload, media, extensions, multiple
   }, [extensions, configMedia?.extensions]);
 
   const handleFiles = useCallback(async (files: File[]) => {
+    if (handlingFiles.current) return;
+    if (requiredCount !== undefined && files.length !== requiredCount) {
+      toast.error(`Select ${requiredCount} replacement ${requiredCount === 1 ? "file" : "files"}.`);
+      return;
+    }
+    if (maxCount !== undefined && files.length > maxCount) {
+      toast.error(`Select up to ${maxCount} ${maxCount === 1 ? "file" : "files"}.`);
+      return;
+    }
+    if (preparing) preparing.current++;
+    handlingFiles.current = true;
+    const savedFiles: FileSaveData[] = [];
     try {
       for (const file of files) {
         const uploadFilename = getUploadFileName(
@@ -83,17 +103,17 @@ function MediaUploadRoot({ children, path, onUpload, media, extensions, multiple
             resizeNote = ` (${formatFileSize(file.size)} → ${formatFileSize(prepared.size)})`;
           }
 
-          const content = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const base64Content = (reader.result as string).replace(/^(.+,)/, "");
-              resolve(base64Content);
-            };
-            reader.onerror = () => reject(new Error("Failed to read file"));
-            reader.readAsDataURL(prepared);
-          });
-
           const fullPath = joinPathSegments([path ?? "", uploadFilename]);
+          if (stage) {
+            return {
+              path: await stage(configMedia.name, fullPath, prepared),
+              name: uploadFilename,
+              type: "file",
+              extension: getFileExtension(uploadFilename),
+              size: prepared.size,
+            };
+          }
+          const content = await readMediaContent(prepared);
           const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeBranch(config.branch)}/files/${encodeSegment(fullPath)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -113,11 +133,8 @@ function MediaUploadRoot({ children, path, onUpload, media, extensions, multiple
         })();
 
         toast.promise(uploadPromise, {
-          loading: `Uploading ${file.name}`,
-          success: (savedEntry) => {
-            onUpload?.(savedEntry);
-            return `Uploaded ${file.name}${resizeNote}`;
-          },
+          loading: `${stage ? "Preparing" : "Uploading"} ${file.name}`,
+          success: () => `${stage ? "Ready to save" : "Uploaded"} ${file.name}${resizeNote}`,
           error: (error: unknown) => error instanceof Error ? error.message : "Upload failed",
         });
 
@@ -126,15 +143,21 @@ function MediaUploadRoot({ children, path, onUpload, media, extensions, multiple
         // sent one at a time: each upload is a commit, and concurrent commits
         // to the same branch fail with "is at <sha> but expected <sha>".
         try {
-          await uploadPromise;
+          const entry = await uploadPromise;
+          savedFiles.push(entry);
+          onUpload?.(entry);
         } catch {
           // Already reported by the toast; carry on with the remaining files.
         }
       }
+      if (savedFiles.length === files.length) await onBatchUpload?.(savedFiles);
     } catch (error) {
-      console.error(error);
+      toast.error(error instanceof Error ? error.message : "Failed to prepare the selected files.");
+    } finally {
+      handlingFiles.current = false;
+      if (preparing) preparing.current--;
     }
-  }, [config, path, configMedia?.name, configMedia?.rename, configMedia?.resize, onUpload, rename]);
+  }, [config, path, configMedia?.name, configMedia?.rename, configMedia?.resize, maxCount, onUpload, onBatchUpload, preparing, rename, requiredCount, stage]);
 
   const contextValue = useMemo(() => ({
     handleFiles,
@@ -188,6 +211,7 @@ function MediaUploadTrigger({ children }: MediaUploadTriggerProps) {
     if (!files || files.length === 0) return;
 
     const validFiles = filterAcceptedFiles(Array.from(files));
+    event.target.value = "";
     if (validFiles.length === 0) return;
 
     context.handleFiles(validFiles);

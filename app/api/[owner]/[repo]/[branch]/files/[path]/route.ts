@@ -9,7 +9,10 @@ import { getConfig, updateConfig } from "@/lib/config-store";
 import { getFileExtension, getFileName, normalizePath, serializedTypes, getParentPath } from "@/lib/utils/file";
 import { assertGithubIdentity } from "@/lib/authz-shared";
 import { getToken } from "@/lib/token";
-import { updateFileCache } from "@/lib/github-cache-file";
+import { getBranchHeadSha, updateFileCache } from "@/lib/github-cache-file";
+import { commitChanges, gitBlobSha } from "@/lib/github-commit";
+import { entryMediaSnapshot, prepareEntryMedia } from "@/lib/github-entry-media";
+import { mapMediaReferences, mediaReferences } from "@/lib/staged-media";
 import { createHttpError, toErrorResponse } from "@/lib/api-error";
 import mergeWith from "lodash.mergewith";
 import { buildCommitTokens, resolveCommitIdentity, resolveCommitMessage } from "@/lib/commit-message";
@@ -37,7 +40,7 @@ export async function POST(
     const { token } = await getToken(user, params.owner, params.repo, true);
     if (!token) throw new Error("Token not found");
 
-    const normalizedPath = normalizePath(params.path);
+    let normalizedPath = normalizePath(params.path);
 
     const config = await getConfig(params.owner, params.repo, params.branch, {
       getToken: async () => token,
@@ -51,6 +54,12 @@ export async function POST(
     let schema;
     let schemaCommitTemplates: Record<string, string> | undefined;
     let schemaCommitIdentity: "app" | "user" | undefined;
+    let sourcePath = normalizedPath;
+    let mediaCommit: {
+      head: string;
+      additions: Awaited<ReturnType<typeof prepareEntryMedia>>["additions"];
+    } | undefined;
+    let savedFormContent: any;
 
     switch (data.type) {
       case "content":
@@ -69,6 +78,50 @@ export async function POST(
         if (schema.subfolders === false && getParentPath(normalizedPath) !== schema.path) {
           throw new Error(`Subfolders are not allowed for collection "${data.name}".`);
         }
+
+        let stagedNames: Map<string, string> | undefined;
+        if (data.stagedMedia !== undefined || mediaReferences(data.content).size > 0) {
+          const root = normalizePath(schema.path);
+          const { type: schemaType, extension: schemaExtension } = schema;
+          const validPath = (path: string) => schemaType === "file"
+            ? path === root
+            : (!root || path.startsWith(`${root}/`)) &&
+              !path.split("/").some((part) => part === ".." || /^\.git$/i.test(part)) &&
+              getFileName(path) !== ".gitkeep" &&
+              getFileExtension(path) === (schemaExtension ?? "");
+          if (!validPath(normalizedPath)) throw createHttpError("Invalid entry path.", 400);
+          if (data.renameFrom !== undefined) {
+            if (typeof data.renameFrom !== "string" || !data.sha || schema.type !== "collection" ||
+                !isContentOperationAllowed("rename", { schema })) {
+              throw createHttpError("Renaming this entry isn't allowed.", 403);
+            }
+            sourcePath = normalizePath(data.renameFrom);
+            if (!validPath(sourcePath) || getParentPath(sourcePath) !== getParentPath(normalizedPath)) {
+              throw createHttpError("Invalid original entry path.", 400);
+            }
+          }
+
+          const head = await getBranchHeadSha(params.owner, params.repo, params.branch, token, { force: true });
+          const snapshot = entryMediaSnapshot(token, params.owner, params.repo, head);
+          if (data.sha) {
+            const current = await snapshot.getFile(sourcePath);
+            if (!current || Array.isArray(current) || current.type !== "file" || current.sha !== data.sha) {
+              throw createHttpError("File has changed since you last loaded it. Please refresh the page and try again.", 409);
+            }
+            snapshot.reserved.add(sourcePath);
+          }
+          if (!data.sha || sourcePath !== normalizedPath) {
+            normalizedPath = await snapshot.reserve(normalizedPath, !data.sha && onConflict === "rename");
+            if (!data.sha) sourcePath = normalizedPath;
+          }
+          const prepared = await prepareEntryMedia(data.stagedMedia, data.content, config!.object, snapshot);
+          mediaCommit = { head, additions: prepared.additions };
+          stagedNames = prepared.filenames;
+        }
+        const resolveMedia = <T,>(value: T, encode: boolean) => mapMediaReferences(value, (reference) => {
+          const filename = stagedNames?.get(reference);
+          return filename === undefined ? reference : encode ? encodeURIComponent(filename) : filename;
+        });
 
         if (getFileName(normalizedPath) === ".gitkeep") {
           // Folder creation
@@ -94,9 +147,17 @@ export async function POST(
               contentFields = schema.fields;
             }
             
-            // Use mapBlocks to convert config blocks array to a map
             const zodSchema = generateZodSchema(contentFields);
-            const zodValidation = zodSchema.safeParse(contentObject);
+            let zodValidation = zodSchema.safeParse(contentObject);
+            if (stagedNames && zodValidation.success) {
+              if (mediaReferences(zodValidation.data).size !== stagedNames.size) {
+                throw createHttpError("Some staged files are outside the entry's fields.", 400);
+              }
+              const resolvedContent = deepMap(zodValidation.data, contentFields, (value, field) =>
+                resolveMedia(value, field.type === "rich-text" || field.name === "body"),
+              );
+              zodValidation = zodSchema.safeParse(resolvedContent);
+            }
             
             if (zodValidation.success === false ) {
               const errorMessages = zodValidation.error.errors.map((error: any) => {
@@ -119,6 +180,7 @@ export async function POST(
             const unwrappedContentObject = schema.list
               ? validatedContentObject.listWrapper
               : validatedContentObject;
+            savedFormContent = schema.list ? zodValidation.data.listWrapper : zodValidation.data;
 
             let finalContentObject = JSON.parse(JSON.stringify(unwrappedContentObject));
 
@@ -127,8 +189,8 @@ export async function POST(
               const response = await octokit.rest.repos.getContent({
                 owner: params.owner,
                 repo: params.repo,
-                path: normalizedPath,
-                ref: params.branch
+                path: sourcePath,
+                ref: mediaCommit?.head ?? params.branch
               });
               
               if (Array.isArray(response.data)) {
@@ -156,7 +218,11 @@ export async function POST(
             );
             contentBase64 = Buffer.from(stringifiedContentObject).toString("base64");
           } else {
-            contentBase64 = Buffer.from(data.content.body ?? "").toString("base64");
+            if (stagedNames && mediaReferences(data.content.body).size !== stagedNames.size) {
+              throw createHttpError("Some staged files are outside the entry's body.", 400);
+            }
+            savedFormContent = { ...data.content, body: resolveMedia(data.content.body ?? "", true) };
+            contentBase64 = Buffer.from(savedFormContent.body).toString("base64");
           }
         }
         break;
@@ -208,6 +274,53 @@ export async function POST(
           email: user.email,
         }
       : undefined;
+
+    const saveOptions = {
+      configObject: config?.object,
+      templatesOverride: schemaCommitTemplates,
+      contentName: data.name,
+      user: user.email || user.name || String(user.id || ""),
+      onConflict,
+      committer,
+    } as const;
+
+    if (mediaCommit) {
+      const { owner, repo, branch } = params;
+      const entryContent = Buffer.from(contentBase64, "base64").toString("utf8");
+      const action = sourcePath !== normalizedPath ? "rename" : data.sha ? "update" : "create";
+      const message = fileCommitMessage(owner, repo, branch, sourcePath, action, saveOptions,
+        action === "rename" ? normalizedPath : undefined);
+      const commitSha = await commitChanges({
+        token, owner, repo, branch, message, committer,
+        expectedHeadSha: mediaCommit.head,
+        additions: [{ path: normalizedPath, content: entryContent }, ...mediaCommit.additions],
+        deletions: action === "rename" ? [sourcePath] : [],
+      });
+      const commit = { sha: commitSha, timestamp: Date.now() };
+      const sha = gitBlobSha(entryContent);
+      try {
+        if (action === "rename") await updateFileCache("collection", owner, repo, branch, {
+          type: "delete", path: sourcePath, commit,
+        });
+        await updateFileCache("collection", owner, repo, branch, {
+          type: action === "update" ? "modify" : "add",
+          path: normalizedPath, sha, content: entryContent, size: Buffer.byteLength(entryContent), commit,
+        });
+        for (const file of mediaCommit.additions) {
+          await updateFileCache("media", owner, repo, branch, {
+            type: "add", path: file.path, sha: gitBlobSha(file.content), content: "", size: file.content.length, commit,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to update the cache after saving entry and media", error);
+      }
+
+      return Response.json({
+        status: "success",
+        message: `File "${normalizedPath}" and its media saved successfully.`,
+        data: { sha, path: normalizedPath, contentObject: savedFormContent },
+      });
+    }
     
     const response = await githubSaveFile(
       token,
@@ -217,14 +330,7 @@ export async function POST(
       normalizedPath,
       contentBase64,
       data.sha,
-      {
-        configObject: config?.object,
-        templatesOverride: schemaCommitTemplates,
-        contentName: data.name,
-        user: user.email || user.name || String(user.id || ""),
-        onConflict,
-        committer,
-      }
+      saveOptions,
     );
   
     const savedPath = response?.data.content?.path;
@@ -289,6 +395,28 @@ export async function POST(
   }
 };
 
+type SaveOptions = {
+  configObject?: Record<string, any>;
+  templatesOverride?: Record<string, string>;
+  contentName?: string;
+  user?: string;
+  onConflict?: "rename" | "error";
+  committer?: { name: string; email: string };
+};
+
+const fileCommitMessage = (
+  owner: string, repo: string, branch: string, path: string,
+  action: "create" | "update" | "rename", options?: SaveOptions, newPath?: string,
+) => resolveCommitMessage({
+  configObject: options?.configObject,
+  templatesOverride: options?.templatesOverride,
+  action,
+  tokens: buildCommitTokens({
+    action, owner, repo, branch, path, newPath, contentName: options?.contentName,
+    user: options?.user, userName: options?.committer?.name, userEmail: options?.committer?.email,
+  }),
+});
+
 // Helper function to save a file to GitHub (with retry logic for new files)
 const githubSaveFile = async (
   token: string,
@@ -298,34 +426,12 @@ const githubSaveFile = async (
   path: string,
   contentBase64: string,
   sha?: string,
-  options?: {
-    configObject?: Record<string, any>;
-    templatesOverride?: Record<string, string>;
-    contentName?: string;
-    user?: string;
-    onConflict?: "rename" | "error";
-    committer?: { name: string; email: string };
-  },
+  options?: SaveOptions,
 ) => {
   // We disable retries for 409 errors as it means the file has changed (conflict on SHA)
   const octokit = createOctokitInstance(token, { retry: { doNotRetry: [409] } });
   
-  const message = resolveCommitMessage({
-    configObject: options?.configObject,
-    templatesOverride: options?.templatesOverride,
-    action: sha ? "update" : "create",
-    tokens: buildCommitTokens({
-      action: sha ? "update" : "create",
-      owner,
-      repo,
-      branch,
-      path,
-      contentName: options?.contentName,
-      user: options?.user,
-      userName: options?.committer?.name,
-      userEmail: options?.committer?.email,
-    }),
-  });
+  const message = fileCommitMessage(owner, repo, branch, path, sha ? "update" : "create", options);
 
   try {
     // First attempt: try with original path

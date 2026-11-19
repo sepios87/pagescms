@@ -5,7 +5,9 @@ import { getRawUrl } from "@/lib/github-image";
 import { useRepo } from "@/contexts/repo-context";
 import { useConfig } from "@/contexts/config-context";
 import { cn } from "@/lib/utils";
+import { getFileName } from "@/lib/utils/file";
 import { Ban, ImageOff, Loader } from "lucide-react";
+import { useStagedMedia } from "@/contexts/staged-media-context";
 
 export function Thumbnail({
   name,
@@ -22,11 +24,13 @@ export function Thumbnail({
   const { owner, repo, isPrivate } = useRepo();
   
   const { config } = useConfig();
+  const local = useStagedMedia()?.media.get(getFileName(path ?? ""));
+  const displayUrl = local?.preview ?? rawUrl;
   const branch = config?.branch!;
   
   useEffect(() => {
     const fetchRawUrl = async () => {
-      if (path) {
+      if (path && !local) {
         setError(null);
         if (!rawUrl) setRawUrl(null);
         try {
@@ -41,7 +45,7 @@ export function Thumbnail({
     };
 
     fetchRawUrl();
-  }, [path, owner, repo, branch, isPrivate, name, rawUrl]);
+  }, [path, owner, repo, branch, isPrivate, name, rawUrl, local]);
 
   return (
     <div
@@ -51,10 +55,10 @@ export function Thumbnail({
       )}
     >
       {path
-        ? rawUrl
+        ? displayUrl
           ? <img
-              src={rawUrl}
-              alt={path.split("/").pop() || "thumbnail"}
+              src={displayUrl}
+              alt={(local?.path ?? path).split("/").pop() || "thumbnail"}
               loading="lazy"
               className="absolute inset-0 w-full h-full object-cover"
             />
